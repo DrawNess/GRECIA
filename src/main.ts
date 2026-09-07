@@ -33,7 +33,7 @@ document.head.appendChild(link);
 
 startLoop(
   (dt) => scene.update(dt),
-  () => scene.render(stage.crisp, stage.soft),
+  () => scene.render(stage.crisp, stage.soft, stage.haze),
 );
 
 if (loadSave().unlocked) {
@@ -45,6 +45,6 @@ if (loadSave().unlocked) {
   });
 }
 
-// Entrada en fundido desde crema.
+// Entrada en fundido desde crema (setTimeout: no depende de que rAF esté activo).
 const veil = document.getElementById('veil')!;
-requestAnimationFrame(() => requestAnimationFrame(() => veil.classList.add('is-gone')));
+setTimeout(() => veil.classList.add('is-gone'), 80);

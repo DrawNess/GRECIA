@@ -1,6 +1,7 @@
 // Resolución interna fija y escalado entero al tamaño de la ventana.
-// Dos capas: `soft` (baja resolución, se estira con suavizado → borroso)
-// y `crisp` (320×180, se estira sin suavizado → píxel nítido).
+// Tres capas: `soft` (baja resolución, se estira con suavizado → borroso),
+// `crisp` (320×180, sin suavizado → píxel nítido) y `haze` (baja resolución,
+// transparente, encima de todo → niebla y luz).
 
 export const VW = 320;
 export const VH = 180;
@@ -12,6 +13,7 @@ export class Stage {
   readonly ui: HTMLElement;
   readonly crisp: CanvasRenderingContext2D;
   readonly soft: CanvasRenderingContext2D;
+  readonly haze: CanvasRenderingContext2D;
   scale = 1;
 
   constructor() {
@@ -19,10 +21,13 @@ export class Stage {
     this.ui = document.getElementById('ui')!;
     const crisp = document.getElementById('crisp') as HTMLCanvasElement;
     const soft = document.getElementById('soft') as HTMLCanvasElement;
+    const haze = document.getElementById('haze') as HTMLCanvasElement;
     crisp.width = VW; crisp.height = VH;
     soft.width = SW; soft.height = SH;
+    haze.width = SW; haze.height = SH;
     this.crisp = crisp.getContext('2d', { alpha: true })!;
     this.soft = soft.getContext('2d', { alpha: false })!;
+    this.haze = haze.getContext('2d', { alpha: true })!;
     this.crisp.imageSmoothingEnabled = false;
     this.soft.imageSmoothingEnabled = true;
     window.addEventListener('resize', () => this.fit());

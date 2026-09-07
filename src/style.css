@@ -1,6 +1,6 @@
 :root {
   --lilac-1: #e9dcf5;
-  --lilac-2: #c9a9e6;
+  --lilac-2: #cdbcea;
   --lilac-3: #9d74c7;
   --lilac-4: #6a4a8c;
   --cream: #fbf7f1;
@@ -39,7 +39,7 @@ body {
   display: block;
 }
 
-#soft { image-rendering: auto; }
+#soft, #haze { image-rendering: auto; }
 
 #crisp {
   image-rendering: crisp-edges;
@@ -71,7 +71,7 @@ body {
   width: calc(118 * var(--u));
   box-sizing: border-box;
   padding: calc(10 * var(--u)) calc(11 * var(--u)) calc(11 * var(--u));
-  background: rgba(252, 248, 243, 0.9);
+  background: rgba(253, 251, 255, 0.78);
   border: var(--u) solid var(--lilac-2);
   outline: var(--u) solid rgba(255, 255, 255, 0.85);
   outline-offset: calc(-3 * var(--u));

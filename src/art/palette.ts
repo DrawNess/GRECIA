@@ -1,32 +1,39 @@
-// Paleta: verdes salvia + lilas + beige papel. Pastel, sin negros puros.
+// Paleta de día, alta en luz: celeste suave, lilas pastel (ref. foto de
+// lilas), verdes frescos, marrón cálido y bruma blanca. Sin negros puros.
 export const C = {
-  // pasto
-  grassDeep: '#5e8a62',
-  grassDark: '#6f9c6e',
-  grass: '#86b07f',
-  grassLight: '#9fc494',
-  grassPale: '#b8d6ab',
-  // hojas del árbol
-  leafDark: '#4f7d58',
-  leaf: '#6a9a6b',
-  leafLight: '#8fb884',
-  // lilas
-  lilacDeep: '#6f4a9c',
-  lilacDark: '#8a63b8',
-  lilac: '#a986d1',
-  lilacLight: '#c7abe4',
-  lilacPale: '#e2d1f2',
-  lilacPink: '#c99ad6',
-  flowerCenter: '#f6ecb0',
-  // camino y papel kraft
-  pathDark: '#c9b493',
-  path: '#dccbab',
-  pathLight: '#ebdfc4',
-  pebble: '#b3a184',
-  pebbleLight: '#f2eadb',
-  paper: '#e7d9c0',
-  paperDark: '#cbb897',
-  paperLight: '#f3eadb',
+  // cielo y bruma
+  skyTop: '#cbe4f7',
+  skyMid: '#dbecf9',
+  skyLow: '#ebf3fa',
+  skyHorizon: '#f6f3f9',
+  mist: '#f9f6fc',
+  // lilas (de más claro a más oscuro)
+  lilacPale: '#f3ecfb',
+  lilacLight: '#dccff4',
+  lilac: '#c3aeea',
+  lilacMid: '#ab95dc',
+  lilacDark: '#9179c8',
+  lilacDeep: '#7460a8',
+  bud: '#bd82cc',
+  budDark: '#9563a8',
+  flowerCenter: '#f6e6a6',
+  // árbol
+  canopyBase: '#b4a5dc',
+  canopyShade: '#9886c8',
+  trunk: '#8a6a54',
+  trunkLight: '#a98a70',
+  trunkDark: '#65483a',
+  leafDark: '#5f9b62',
+  leaf: '#7fbb79',
+  leafLight: '#a6d59a',
+  // suelo y camino
+  ground: '#a8d09a',
+  groundDark: '#8dbb82',
+  groundLight: '#c2e2b2',
+  path: '#ecdfc6',
+  pathDark: '#d8c9ad',
+  pathLight: '#f6eedc',
+  pebble: '#c9b99f',
   // Grecia
   outline: '#3b2a33',
   hair: '#5a3a2c',
@@ -34,14 +41,16 @@ export const C = {
   hairDark: '#3f261d',
   skin: '#f3d6bd',
   skinShade: '#dcb392',
-  dress: '#f1e6d3',
-  dressShade: '#dccbb0',
-  dressDeep: '#c2ad8c',
+  dress: '#f4ebdd',
+  dressShade: '#dfd0b8',
+  dressDeep: '#c4b094',
   white: '#fdfaf4',
   ribbon: '#b98bdc',
   ribbonDark: '#8c62b0',
   shoe: '#5b4148',
   // varios
-  shadow: '#2e4a3a',
+  shadow: '#4a6a50',
   sparkle: '#ffffff',
+  butterfly: '#fff8e0',
+  butterfly2: '#f8e79c',
 } as const;

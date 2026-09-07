@@ -8,12 +8,13 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 - **Stack:** Vite + TypeScript, Canvas 2D, cero dependencias en runtime
   (solo las fuentes `DotGothic16` y `Pixelify Sans`, empaquetadas).
 - **Resolución interna:** 320×180, escalado entero. Dos capas: `soft`
-  (80×45, se estira con suavizado → borroso) y `crisp` (nítida). El
-  "desenfoque de ensueño" es una máscara radial entre ambas: costo cero.
+  (80×45, se estira con suavizado → borroso), `crisp` (nítida) y `haze`
+  (80×45, niebla y luz encima). El "desenfoque de ensueño" es una máscara
+  radial entre `soft` y `crisp`: costo cero.
 - **Controles (juego):** flechas / WASD mover · Z / Espacio / Enter acción ·
   X / Esc cancelar.
 - **Perspectiva del juego:** vista lateral 2.5D con plano de suelo y parallax.
-  (La escena del menú es una ilustración vista desde arriba.)
+  (La escena del menú es una ilustración frontal, cámara baja.)
 - **Hosting:** GitHub Pages con GitHub Actions. Repo público → las respuestas
   de la puerta van hasheadas (sha256) y la carta final irá cifrada (AES-GCM)
   con la clave del QR.
@@ -34,8 +35,12 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 
 ## Menú (etapa 0)
 
-- Escena: jardín de lilas visto desde arriba; Grecia de espaldas (trenza,
-  vestido beige) bajo el árbol; ramos en el pasto; pétalos cayendo; bokeh.
+- Escena (refs: composición de "gigantes entre bruma" + foto de lilas): árbol
+  de lilas enorme que llena la pantalla, visto de frente; racimos grandes con
+  flores de 4 pétalos nítidas al centro-izquierda y desenfocadas bajo el
+  panel; día alto en luz (celeste, sol cálido arriba a la izquierda, bruma
+  blanca sobre el pasto); Grecia pequeña de espaldas en el camino, delgada,
+  dos trenzas cortas; pétalos, rocío, mariposas y bancos de niebla animados.
 - Panel lateral: título, "Escribe tu nombre completo". Única respuesta
   válida, en mayúsculas obligatorias: se compara por sha256
   (`src/content/gate.ts`). Si escribe bien pero en minúsculas, se le pide

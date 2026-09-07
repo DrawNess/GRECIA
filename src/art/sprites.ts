@@ -1,8 +1,8 @@
 import { sprite } from '../engine/pixels';
 import { C } from './palette';
 
-// Grecia vista desde arriba y de espaldas: cabello castaño con partidura,
-// trenza cayendo por la espalda con un lazo lila, vestido beige formal.
+// Grecia de espaldas, delgada: cabello con partidura, dos trenzas cortas
+// hasta los hombros con lazos lila, vestido beige formal.
 const GRECIA_PAL = {
   O: C.outline, H: C.hair, h: C.hairLight, k: C.hairDark,
   S: C.skin, s: C.skinShade, D: C.dress, d: C.dressShade, e: C.dressDeep,
@@ -10,40 +10,35 @@ const GRECIA_PAL = {
 };
 
 const GRECIA_A = [
-  '.......OOOO.......',
-  '.....OOhhhhOO.....',
-  '....OhhHHHHhhO....',
-  '...OhHHHkHHHHhO...',
-  '...OHHHHkHHHHHO...',
-  '..OHHHHHkHHHHHHO..',
-  '..OHHHHHkHHHHHHO..',
-  '..OHHHHHHHHHHHHO..',
-  '..OkHHHHHHHHHHkO..',
-  '...OkHHHHHHRHkO...',
-  '....OkkHHHHkkO....',
-  '.....OWkHHkWO.....',
-  '...OODDWkHkWDDOO..',
-  '..ODDDDDdHhdDDDDO.',
-  '.ODDDDDDDkHkDDDDDO',
-  '.ODDDDDDDhHhDDDDDO',
-  '.ODdDDDDDkHkDDDdDO',
-  '.ODdDDDDDhHhDDDdDO',
-  '.OSdDDDDDkHkDDDdSO',
-  '.OSdDDDDDhHhDDDdSO',
-  '..OdDDDDDkHkDDDdO.',
-  '..OdDDDDrRRrDDDdO.',
-  '..OddDDDDRRDDDddO.',
-  '..OeddDDDDDDDddeO.',
-  '..OeeddDDDDDddeeO.',
-  '...OOOOOOOOOOOOO..',
-  '.....OBBO..OBBO...',
-  '......OO....OO....',
+  '....OOOO....',
+  '...OhhkhhO..',
+  '..OhHHkHHhO.',
+  '..OHHHkHHHO.',
+  '..OHHHkHHHO.',
+  '..OHHHHHHHO.',
+  '..OkHHHHHkO.',
+  '...OkHHHkO..',
+  '...OHWWWHO..',
+  '..ODHDDDHDO.',
+  '..ODkDDDkDO.',
+  '..ODRDDDRDO.',
+  '..ODrDdDrDO.',
+  '..ODDDDDDDO.',
+  '..ODDDdDDDO.',
+  '..OSDDDDDSO.',
+  '..OSDDdDDSO.',
+  '..ODdDDDdDO.',
+  '.ODddDdDddDO',
+  '.OeddDdDddeO',
+  '..OOOOOOOOO.',
+  '...OBB.BBO..',
+  '...OOO.OOO..',
 ];
 
-// Segundo cuadro: el lazo de la trenza se mueve un píxel (respiración).
+// Segundo cuadro: los lazos de las trenzas se mueven un píxel.
 const GRECIA_B = GRECIA_A.map((row, i) => {
-  if (i === 21) return '..OdDDDDDrRRrDDdO.';
-  if (i === 22) return '..OddDDDDDRRDDddO.';
+  if (i === 11) return '..ODrDDDrDO.';
+  if (i === 12) return '..ODRDdDRDO.';
   return row;
 });
 
@@ -65,5 +60,5 @@ export const SPRIG = sprite(
     '.....L......',
     '.....L......',
   ],
-  { P: C.lilac, Y: C.lilacPale, L: C.leaf },
+  { P: C.lilacMid, Y: C.lilacPale, L: C.leaf },
 );
