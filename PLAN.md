@@ -26,12 +26,21 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 | # | Etapa | Estado |
 |---|-------|--------|
 | 0 | Setup: repo, Vite/TS, Action → Pages, menú con validación de nombre | ✅ código listo · ⏳ falta crear el repo en GitHub y hacer push |
-| 1 | Núcleo del motor: loop, input, sprites animados, tilemap/colisiones, cámara | 🔨 en curso: input, sprites 3 direcciones con caminata, movimiento en franja de suelo, orden con el tronco. Falta: cámara/scroll, más escenarios |
+| 1 | Núcleo del motor: loop, input, sprites animados, colisiones, cámara | ✅ input · sprites 3 direcciones con ciclo de caminata de 4 cuadros · movimiento en franja de suelo · orden por profundidad · colisiones con troncos, faroles, banca y puerta · mundo de 1280 px con cámara suave y parallax (ciudad 0.2×, árboles lejanos 0.45×) |
 | 2 | Capa de ensueño en el juego: parallax, DOF, partículas, transiciones, caja de diálogo | pendiente |
 | 3 | Interacción y guardado: objetos con `J`, diálogos, fragmentos, flags | 🔨 empezado: arbustos con indicador `J`; al pulsar salen mariposas o pájaros (aleatorio, una vez por arbusto). Falta: diálogos, fragmentos, flags |
 | 4 | Puerta + QR: 2ª validación (fecha), token en URL, carta cifrada, tarjeta "ábrelo en la compu", QR | pendiente (falta la fecha) |
 | 5 | Diseño de niveles: escenas y recuerdos (material del autor) | pendiente |
 | 6 | Final y pulido: carta con máquina de escribir, música opcional, QA en PC débil, QR impreso | pendiente |
+
+## Mundo (etapa 1)
+
+- 4 pantallas (1280 px). Vereda continua abajo; senda curva al árbol grande.
+- Tramo 1: árbol grande, arbustos. Tramo 2: farol, banca, segundo árbol.
+  Tramo 3: farol, arbustos. Tramo 4: tercer árbol, farol y una puerta de
+  jardín cerrada como meta (placeholder hasta definir las estaciones).
+- Grecia rodea el tronco por la vereda; faroles y banca están al borde del
+  pasto para no estorbar el paso.
 
 ## Menú (etapa 0)
 

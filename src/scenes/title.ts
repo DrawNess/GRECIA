@@ -1,7 +1,7 @@
-// Escena del menú: un árbol de lilas enorme que llena la pantalla, visto de
-// frente y desde abajo; bruma alta en luz; Grecia pequeña en el camino,
-// de espaldas, caminando hacia el árbol. Lo estático se pinta una vez en
-// PixelBuffers; por cuadro solo pétalos, destellos, bokeh, niebla y la chica.
+// Escena principal: el jardín de lilas. Empieza como menú (una pantalla, con
+// ventana de enfoque y bruma) y, tras el nombre, se abre en un paseo de
+// cuatro pantallas con cámara y parallax. Lo estático se pinta una vez en
+// PixelBuffers; por cuadro solo se componen capas y se dibujan los sprites.
 import { PixelBuffer, hex, sprite, type RGBA } from '../engine/pixels';
 import { Rng } from '../engine/rng';
 import { VW, VH, SW, SH } from '../engine/stage';
@@ -9,13 +9,19 @@ import { C } from '../art/palette';
 import { GRECIA, SPRIG, type DirSprites } from '../art/sprites';
 import { ACTION, type Input } from '../engine/input';
 
+export const WORLD_W = 1280;
 const HORIZON = 150;
-const TRUNK = { x: 168, base: HORIZON + 4, top: 98 };
-const GIRL = { x: 138, y: 136 };
-// Ventana nítida del fondo (elipse) entre el panel y el racimo de primer
-// plano: tronco y Grecia. Hacia los lados el fondo se funde con la capa borrosa.
+const PAR_FAR = 0.2, PAR_MID = 0.45;
+const FAR_W = Math.ceil(VW + PAR_FAR * (WORLD_W - VW));
+const MID_W = Math.ceil(VW + PAR_MID * (WORLD_W - VW));
+const MAIN_TREE = { x: 168, base: HORIZON + 4, top: 98 };
+const GIRL_START = { x: 138, y: 136 };
+// Ventana nítida del menú (elipse) entre el panel y el racimo de primer plano.
 const FOCUS = { x: 155, y: 118, inner: 42, outer: 112, aspect: 0.9 };
+const SPEED_X = 40, SPEED_Y = 24; // px/s
+const GIRL_W = 12, GIRL_H = 23;
 
+type Pt = [number, number];
 interface Petal { x: number; y: number; vx: number; vy: number; amp: number; w: number; ph: number; kind: number; col: string }
 interface Bokeh { x: number; y: number; r: number; vy: number; ph: number; col: string }
 interface Sparkle { x: number; y: number; w: number; ph: number }
@@ -23,40 +29,45 @@ interface Fog { x: number; y: number; rx: number; ry: number; v: number; a: numb
 interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: string }
 // Flor o pétalo que vuela con el viento al empezar el juego.
 interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
-// Arbusto en el suelo. `baseY` decide si Grecia pasa por delante o por detrás.
+// Objeto en el suelo (coordenadas de mundo). `baseY` decide el orden de dibujo.
 type Secret = 'none' | 'butterflies' | 'birds';
-interface Prop { img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number }
-// Mariposa, pájaro o pétalo que sale de un arbusto.
+type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate';
+interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number } }
+// Mariposa, pájaro o pétalo que sale de un arbusto (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type Facing = 'up' | 'down' | 'left' | 'right';
 interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
-const SPEED_X = 40, SPEED_Y = 24;  // px/s
-const GIRL_W = 12, GIRL_H = 23;
 
 const PETAL_COLS = [C.lilac, C.lilacLight, C.lilacMid, C.lilacPale];
-type Pt = [number, number];
 
 export class TitleScene {
-  private readonly back: HTMLCanvasElement;      // fondo con la ventana de enfoque
-  private readonly backFull: HTMLCanvasElement;  // fondo nítido completo (modo juego)
-  private readonly trunk: HTMLCanvasElement;     // tronco aparte: Grecia pasa delante o detrás
-  private readonly front: HTMLCanvasElement;  // racimo de primer plano, nítido
-  private readonly frontSoft: HTMLCanvasElement; // flores fuera de foco (capa haze)
+  // Capas estáticas (de atrás hacia adelante).
+  private readonly sky: HTMLCanvasElement;      // pantalla, no se mueve
+  private readonly far: HTMLCanvasElement;      // ciudad en la neblina (parallax 0.2)
+  private readonly mid: HTMLCanvasElement;      // árboles lejanos (parallax 0.45)
+  private readonly world: HTMLCanvasElement;    // suelo, paseo y copas (1:1)
+  private readonly menuBack: HTMLCanvasElement; // composición del menú con ventana de enfoque
   private readonly softStatic: HTMLCanvasElement;
+  private readonly front: HTMLCanvasElement;     // racimo de la foto, nítido (pantalla)
+  private readonly frontSoft: HTMLCanvasElement; // flores fuera de foco (capa haze)
   private readonly overlay: HTMLCanvasElement;
+  private readonly frame: CanvasRenderingContext2D; // composición viva de cada cuadro
   private readonly sprites: Record<Facing, DirCanvases>;
   private readonly girlShadow: HTMLCanvasElement;
-  private readonly player: Player = { x: GIRL.x, y: GIRL.y, facing: 'up', moving: false, walkT: 0 };
-  private mode: 'menu' | 'game' = 'menu';
-  private focus = 1; // 1 = ventana de enfoque + niebla del menú · 0 = todo nítido (juego)
-  private readonly props: Prop[] = [];
   private readonly marker: HTMLCanvasElement;
-  private critters: Critter[] = [];
+  readonly icon: HTMLCanvasElement;
+
+  private readonly props: Prop[] = [];
+  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0 };
+  private camX = 0;
+  private mode: 'menu' | 'game' = 'menu';
+  private focus = 1;      // 1 = menú (enfoque + niebla) · 0 = juego (todo nítido)
+  private gameT = 0;
+  private frontAlpha = 1;
   private nearProp: Prop | null = null;
-  private gameT = 0;      // segundos desde que empezó el juego
-  private frontAlpha = 1; // opacidad del racimo estático del frente
   private flyers: Flyer[] = [];
+  private critters: Critter[] = [];
   private readonly petals: Petal[] = [];
   private readonly bokeh: Bokeh[] = [];
   private readonly sparkles: Sparkle[] = [];
@@ -67,50 +78,46 @@ export class TitleScene {
   ];
   private readonly rng = new Rng(7);
   private t = 0;
-  readonly icon: HTMLCanvasElement;
 
   constructor() {
     const rng = new Rng(20250907);
     const dew: Pt[] = [];
 
-    const back = new PixelBuffer(VW, VH);
-    paintSky(back);
-    paintDistance(back, rng);
-    paintGround(back, rng);
-    paintCanopy(back, rng, dew);
-    const trunk = new PixelBuffer(VW, VH);
-    paintTrunk(trunk);
-    for (const [cx, baseY, r] of BUSHES) {
-      const img = renderBush(rng, r);
+    // ── Capas ──
+    const sky = new PixelBuffer(VW, VH);
+    paintSky(sky);
+    this.sky = sky.toCanvas();
+
+    const far = new PixelBuffer(FAR_W, VH);
+    paintCity(far, rng, FAR_W);
+    this.far = far.toCanvas();
+
+    const mid = new PixelBuffer(MID_W, VH);
+    paintDistantTrees(mid, rng, MID_W);
+    this.mid = mid.toCanvas();
+
+    const world = new PixelBuffer(WORLD_W, VH);
+    paintGround(world, rng);
+    paintCanopyAt(world, rng, dew, 160, 40, 200, 82, 1);
+    paintCanopyAt(world, rng, dew, 640, 66, 78, 50, 0.7);
+    paintCanopyAt(world, rng, dew, 1090, 64, 68, 46, 0.62);
+    this.world = world.toCanvas();
+
+    // ── Objetos ──
+    this.addTrunk(rng, MAIN_TREE.x, MAIN_TREE.base, MAIN_TREE.top, 8, [[[-2, 104], [112, 66]], [[-1, 100], [156, 44]], [[2, 104], [231, 62]], [[3, 110], [248, 104]]], 10);
+    this.addTrunk(rng, 640, 152, 106, 5, [[[-1, 112], [600, 84]], [[0, 108], [646, 74]], [[2, 112], [688, 88]]], 7);
+    this.addTrunk(rng, 1090, 153, 110, 4.5, [[[-1, 116], [1058, 90]], [[1, 112], [1096, 80]], [[2, 116], [1124, 94]]], 6);
+    // Faroles y banca al borde del pasto, sin estorbar la vereda.
+    for (const [x, baseY] of [[420, 164], [800, 164], [1180, 164]] as Pt[]) this.addProp('lamp', renderLamp(), x, baseY, 3, { hw: 2, depth: 3 });
+    this.addProp('bench', renderBench(), 540, 165, 12, { hw: 11, depth: 3 });
+    this.addProp('gate', renderGate(rng), 1256, 160, 16, { hw: 15, depth: 4 });
+    for (const [cx, baseY, r] of bushSpots(rng, this.props)) {
       const v = rng.next();
-      this.props.push({
-        img: img.toCanvas(), x: cx - (img.w >> 1), y: baseY - img.h + 3, cx, baseY, r,
-        secret: v < 0.42 ? 'none' : v < 0.74 ? 'butterflies' : 'birds', used: false, shake: 0,
-      });
+      this.addProp('bush', renderBush(rng, r).toCanvas(), cx, baseY, r, undefined, v < 0.42 ? 'none' : v < 0.74 ? 'butterflies' : 'birds');
     }
     this.marker = sprite(MARKER_ROWS, { O: C.lilacDark, W: C.white, Z: C.lilacDeep }).toCanvas();
 
-    const front = new PixelBuffer(VW, VH);
-    paintForeground(front, rng, dew);
-    const edge = new PixelBuffer(VW, VH);
-    paintForegroundBlur(edge, rng);
-
-    // La versión borrosa se calcula sobre la imagen completa.
-    const full = new PixelBuffer(VW, VH);
-    full.blit(back, 0, 0);
-    for (const pr of this.props) if (pr.baseY <= TRUNK.base + 1) full.blit(PixelBuffer_from(pr.img), pr.x, pr.y);
-    full.blit(trunk, 0, 0);
-    for (const pr of this.props) if (pr.baseY > TRUNK.base + 1) full.blit(PixelBuffer_from(pr.img), pr.x, pr.y);
-    full.blit(front, 0, 0);
-    this.softStatic = makeSoft(full.toCanvas());
-    this.backFull = back.toCanvas();
-    this.back = makeFocused(this.backFull);
-    this.trunk = trunk.toCanvas();
-    this.front = front.toCanvas();
-    this.frontSoft = downsample(edge.toCanvas());
-    this.overlay = makeOverlay();
-    this.icon = SPRIG.toCanvas();
-
+    // ── Grecia ──
     const toCanvases = (d: DirSprites): DirCanvases => ({ idle: d.idle.map((f) => f.toCanvas()), walk: d.walk.map((f) => f.toCanvas()) });
     const right = toCanvases(GRECIA.side);
     this.sprites = { up: toCanvases(GRECIA.back), down: toCanvases(GRECIA.front), right, left: { idle: right.idle.map(flipX), walk: right.walk.map(flipX) } };
@@ -118,6 +125,28 @@ export class TitleScene {
     sh.ellipse(6, 2, 5, 1, hex(C.shadow, 60));
     this.girlShadow = sh.toCanvas();
 
+    // ── Primer plano (la foto) ──
+    const front = new PixelBuffer(VW, VH);
+    paintForeground(front, rng, dew);
+    const edge = new PixelBuffer(VW, VH);
+    paintForegroundBlur(edge, rng);
+    this.front = front.toCanvas();
+    this.frontSoft = downsample(edge.toCanvas());
+
+    // ── Composiciones del menú ──
+    const frame = document.createElement('canvas');
+    frame.width = VW; frame.height = VH;
+    this.frame = frame.getContext('2d')!;
+    this.frame.imageSmoothingEnabled = false;
+    this.compose(this.frame, false);
+    this.menuBack = makeFocused(frame);
+    this.compose(this.frame, true);
+    this.frame.drawImage(this.front, 0, 0);
+    this.softStatic = makeSoft(frame);
+    this.overlay = makeOverlay();
+    this.icon = SPRIG.toCanvas();
+
+    // ── Ambiente ──
     for (let i = 0; i < 28; i++) this.petals.push(this.newPetal(true));
     for (let i = 0; i < 8; i++) {
       this.bokeh.push({
@@ -126,12 +155,10 @@ export class TitleScene {
         col: this.rng.pick(['255,255,255', '244,236,255', '255,246,224']),
       });
     }
-    // Gotas de rocío: brillan sobre flores de primer plano.
     for (let i = 0; i < 12 && dew.length; i++) {
       const [x, y] = dew[this.rng.int(dew.length)];
       this.sparkles.push({ x, y, w: this.rng.range(0.9, 1.8), ph: this.rng.range(0, 6.28) });
     }
-    // Bancos de niebla (en píxeles de la capa borrosa): densos abajo, tenues arriba.
     const bands: [number, number, number, number][] = [[34, 34, 5, 0.26], [40, 40, 5, 0.3], [45, 46, 5, 0.26], [28, 24, 4, 0.1]];
     for (const [y, rx, ry, a] of bands) {
       this.fog.push({ x: this.rng.range(0, SW), y, rx, ry, v: this.rng.range(0.6, 1.4) * (this.rng.next() < 0.5 ? 1 : -1), a });
@@ -139,17 +166,19 @@ export class TitleScene {
     }
   }
 
-  private newPetal(anywhere: boolean): Petal {
-    const r = this.rng;
-    const k = r.next();
-    return {
-      x: r.range(20, 200),
-      y: anywhere ? r.range(0, VH) : r.range(-24, -4),
-      vx: r.range(1, 5), vy: r.range(7, 15),
-      amp: r.range(3, 8), w: r.range(1.2, 2.6), ph: r.range(0, 6.28),
-      kind: k < 0.12 ? 2 : k < 0.55 ? 0 : 1,
-      col: r.pick(PETAL_COLS),
-    };
+  private addProp(kind: PropKind, img: HTMLCanvasElement, cx: number, baseY: number, r: number, solid?: { hw: number; depth: number }, secret: Secret = 'none'): Prop {
+    const pr: Prop = { kind, img, x: cx - (img.width >> 1), y: baseY - img.height + 3, cx, baseY, r, secret, used: false, shake: 0, solid };
+    this.props.push(pr);
+    return pr;
+  }
+
+  private addTrunk(rng: Rng, x: number, base: number, top: number, halfBase: number, branches: [Pt, Pt][], hw: number): void {
+    const tmp = new PixelBuffer(WORLD_W, VH);
+    paintTrunkAt(tmp, x, base, top, halfBase, branches.map(([a, b]) => [[x + a[0], a[1]], b] as [Pt, Pt]));
+    const crop = cropToContent(tmp);
+    const pr = this.addProp('trunk', crop.pb.toCanvas(), x, base, hw, { hw, depth: 4 });
+    pr.x = crop.x; pr.y = crop.y;
+    void rng;
   }
 
   /** Tras el menú: se despeja la escena y Grecia pasa a controlarse con el teclado. */
@@ -165,21 +194,13 @@ export class TitleScene {
     const rng = new Rng(4242);
     const florets = [5, 6, 7, 8, 10, 12, 14].flatMap((S) => [0.2, 0.9].map((rot) => renderFloret(rng, S, rot)));
     const petals = PETAL_COLS.flatMap((c) => [renderPetal(c, 0), renderPetal(c, 1)]);
-    const weights = FG_MASS.map(([, , r]) => r * r);
-    const totalW = weights.reduce((a, b) => a + b, 0);
-    const pickMass = () => {
-      let u = rng.next() * totalW;
-      for (let i = 0; i < FG_MASS.length; i++) { u -= weights[i]; if (u <= 0) return FG_MASS[i]; }
-      return FG_MASS[FG_MASS.length - 1];
-    };
     const spawn = (img: HTMLCanvasElement, near: boolean, speed: number) => {
-      const [mx, my, r] = pickMass();
+      const [mx, my, r] = pickMass(rng);
       const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * r;
       const x = mx + Math.cos(a) * d, y = my + Math.sin(a) * d;
       this.flyers.push({
         x, y, img, near,
         vx: -(speed + rng.range(0, 90)), vy: -rng.range(10, 55),
-        // Se desprenden primero las del borde izquierdo, luego el resto.
         delay: 0.4 + rng.range(0, 0.9) + Math.max(0, (x - 200) / 120) * 0.6,
         ph: rng.range(0, 6.28),
       });
@@ -189,10 +210,36 @@ export class TitleScene {
     for (let i = 0; i < 110; i++) spawn(rng.pick(petals), false, 60);
   }
 
-  private girlFrame(): HTMLCanvasElement {
+  private newPetal(anywhere: boolean): Petal {
+    const r = this.rng;
+    const k = r.next();
+    return {
+      x: r.range(0, VW), y: anywhere ? r.range(0, VH) : r.range(-24, -4),
+      vx: r.range(1, 5), vy: r.range(7, 15),
+      amp: r.range(3, 8), w: r.range(1.2, 2.6), ph: r.range(0, 6.28),
+      kind: k < 0.12 ? 2 : k < 0.55 ? 0 : 1,
+      col: r.pick(PETAL_COLS),
+    };
+  }
+
+  // ───────────── jugador e interacción ─────────────
+
+  private girlFrame(): { img: HTMLCanvasElement; bob: number } {
     const set = this.sprites[this.player.facing];
-    if (this.player.moving) return set.walk[Math.floor(this.player.walkT / 0.16) & 1];
-    return set.idle[Math.floor(this.t / 0.75) % set.idle.length];
+    if (this.player.moving) {
+      const i = Math.floor(this.player.walkT / 0.13) % set.walk.length;
+      return { img: set.walk[i], bob: i & 1 ? -1 : 0 };
+    }
+    return { img: set.idle[Math.floor(this.t / 0.75) % set.idle.length], bob: 0 };
+  }
+
+  private blocked(x: number, y: number): boolean {
+    const fx = x + GIRL_W / 2, fy = y + GIRL_H - 1;
+    for (const pr of this.props) {
+      if (!pr.solid) continue;
+      if (Math.abs(fx - pr.cx) < pr.solid.hw && fy > pr.baseY - pr.solid.depth && fy < pr.baseY + pr.solid.depth + 1) return true;
+    }
+    return false;
   }
 
   private movePlayer(dt: number, input: Input): void {
@@ -202,23 +249,18 @@ export class TitleScene {
     if (!p.moving) { p.walkT = 0; return; }
     p.walkT += dt;
     p.facing = ax !== 0 ? (ax > 0 ? 'right' : 'left') : ay > 0 ? 'down' : 'up';
-    const clampX = (x: number) => Math.min(VW - GIRL_W + 2, Math.max(-2, x));
-    const clampY = (y: number) => Math.min(VH - GIRL_H, Math.max(HORIZON - GIRL_H + 2, y));
-    // La huella del tronco en el suelo bloquea el paso; se intenta cada eje por separado.
-    const blocked = (x: number, y: number) => {
-      const fx = x + GIRL_W / 2, fy = y + GIRL_H - 1;
-      return fx > TRUNK.x - 10 && fx < TRUNK.x + 10 && fy > TRUNK.base - 4 && fy < TRUNK.base + 5;
-    };
-    const nx = clampX(p.x + ax * SPEED_X * dt), ny = clampY(p.y + ay * SPEED_Y * dt);
-    if (!blocked(nx, ny)) { p.x = nx; p.y = ny; }
-    else if (!blocked(nx, p.y)) p.x = nx;
-    else if (!blocked(p.x, ny)) p.y = ny;
+    const nx = Math.min(WORLD_W - GIRL_W + 2, Math.max(-2, p.x + ax * SPEED_X * dt));
+    const ny = Math.min(VH - GIRL_H, Math.max(HORIZON - GIRL_H + 2, p.y + ay * SPEED_Y * dt));
+    if (!this.blocked(nx, ny)) { p.x = nx; p.y = ny; }
+    else if (!this.blocked(nx, p.y)) p.x = nx;
+    else if (!this.blocked(p.x, ny)) p.y = ny;
   }
 
   private findNearProp(): Prop | null {
     const fx = this.player.x + GIRL_W / 2, fy = this.player.y + GIRL_H - 1;
     let best: Prop | null = null, bestD = Infinity;
     for (const pr of this.props) {
+      if (pr.kind !== 'bush') continue;
       const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
       if (dx > pr.r + 9 || dy > 12) continue;
       const d = dx + dy * 2;
@@ -255,22 +297,24 @@ export class TitleScene {
     for (let i = this.critters.length - 1; i >= 0; i--) {
       const c = this.critters[i];
       c.t += dt;
-      if (c.t < 0) continue; // sale con un pequeño retraso
+      if (c.t < 0) continue;
       if (c.kind === 'puff') {
         c.vy += 70 * dt;
         c.x += c.vx * dt; c.y += c.vy * dt;
       } else if (c.kind === 'butterfly') {
-        c.vy += (-14 - c.vy) * 0.4 * dt; // termina subiendo despacio
+        c.vy += (-14 - c.vy) * 0.4 * dt;
         c.x += (c.vx + Math.sin(c.t * 4.2 + c.ph) * 22) * dt;
         c.y += (c.vy + Math.cos(c.t * 2.6 + c.ph) * 14) * dt;
       } else {
-        c.vy += (-28 - c.vy) * 0.9 * dt; // arranque fuerte, luego planea
+        c.vy += (-28 - c.vy) * 0.9 * dt;
         c.x += c.vx * dt;
         c.y += (c.vy + Math.sin(c.t * 6 + c.ph) * 6) * dt;
       }
-      if (c.t > c.life || c.y < -12 || c.x < -12 || c.x > VW + 12) this.critters.splice(i, 1);
+      if (c.t > c.life || c.y < -12 || c.x < -12 || c.x > WORLD_W + 12) this.critters.splice(i, 1);
     }
   }
+
+  // ───────────── actualización ─────────────
 
   update(dt: number, input?: Input): void {
     this.t += dt;
@@ -289,17 +333,20 @@ export class TitleScene {
         const f = this.flyers[i];
         const age = this.gameT - f.delay;
         if (age <= 0) continue;
-        const k = Math.min(1, age / 0.6); // arranque suave
+        const k = Math.min(1, age / 0.6);
         f.x += f.vx * k * k * dt;
         f.y += (f.vy * k + Math.sin(this.t * 3 + f.ph) * 28) * dt;
         if (f.x < -40 || f.y < -40) this.flyers.splice(i, 1);
       }
+      // Cámara: sigue a Grecia con suavidad, sin salirse del mundo.
+      const target = Math.min(WORLD_W - VW, Math.max(0, this.player.x + GIRL_W / 2 - VW / 2));
+      this.camX += (target - this.camX) * (1 - Math.exp(-5 * dt));
     }
     for (let i = 0; i < this.petals.length; i++) {
       const p = this.petals[i];
       p.y += p.vy * dt;
       p.x += (p.vx + Math.cos(this.t * p.w + p.ph) * p.amp) * dt;
-      if (p.y > VH + 2 || p.x > 215) this.petals[i] = this.newPetal(false);
+      if (p.y > VH + 2 || p.x > VW + 4) this.petals[i] = this.newPetal(false);
     }
     for (const b of this.bokeh) {
       b.y -= b.vy * dt;
@@ -307,7 +354,6 @@ export class TitleScene {
       if (b.y < -b.r) { b.y = SH + b.r; b.x = this.rng.range(0, SW); }
     }
     for (const b of this.flies) {
-      // Vuelo errático y lento alrededor de un punto que deriva.
       b.cx += Math.sin(this.t * 0.23 + b.ph) * 4 * dt;
       b.cy += Math.cos(this.t * 0.17 + b.ph) * 2.5 * dt;
       b.x = b.cx + Math.sin(this.t * 1.3 + b.ph) * 9;
@@ -320,56 +366,73 @@ export class TitleScene {
     }
   }
 
-  render(crisp: CanvasRenderingContext2D, soft: CanvasRenderingContext2D, haze: CanvasRenderingContext2D): void {
-    // Capa borrosa: fondo suave + luces bokeh flotando.
-    soft.drawImage(this.softStatic, 0, 0);
-    for (const b of this.bokeh) {
-      const a = 0.08 + 0.08 * (0.5 + 0.5 * Math.sin(this.t * 0.7 + b.ph));
-      soft.fillStyle = `rgba(${b.col},${a.toFixed(3)})`;
-      soft.beginPath();
-      soft.arc(b.x, b.y, b.r, 0, 6.2832);
-      soft.fill();
-    }
+  // ───────────── dibujo ─────────────
 
-    // Capa nítida.
-    crisp.clearRect(0, 0, VW, VH);
-    crisp.drawImage(this.back, 0, 0);
-    if (this.focus < 1) {
-      crisp.globalAlpha = 1 - this.focus;
-      crisp.drawImage(this.backFull, 0, 0);
-      crisp.globalAlpha = 1;
-    }
+  // Compone cielo, parallax, suelo y objetos (con Grecia opcional) según la cámara.
+  private compose(ctx: CanvasRenderingContext2D, withPlayer: boolean): void {
+    const cam = Math.round(this.camX);
+    ctx.clearRect(0, 0, VW, VH);
+    ctx.drawImage(this.sky, 0, 0);
+    ctx.drawImage(this.far, -Math.round(this.camX * PAR_FAR), 0);
+    ctx.drawImage(this.mid, -Math.round(this.camX * PAR_MID), 0);
+    ctx.drawImage(this.world, -cam, 0);
 
-    // Todo lo que pisa el suelo se dibuja de atrás hacia adelante según su base.
-    const p = this.player;
-    const gx = Math.round(p.x), gy = Math.round(p.y);
-    const img = this.girlFrame();
     type Drawable = { baseY: number; draw: () => void };
-    const items: Drawable[] = [
-      { baseY: TRUNK.base + 1, draw: () => crisp.drawImage(this.trunk, 0, 0) },
-      { baseY: p.y + GIRL_H - 1, draw: () => { crisp.drawImage(this.girlShadow, gx, gy + GIRL_H - 2); crisp.drawImage(img, gx, gy); } },
-    ];
+    const items: Drawable[] = [];
     for (const pr of this.props) {
-      // En el menú los arbustos fuera de la ventana de enfoque se funden con el fondo borroso.
-      const alpha = this.focus > 0 ? 1 - this.focus * (1 - focusAt(pr.cx, pr.baseY)) : 1;
-      const sx = pr.shake > 0 ? Math.round(Math.sin(pr.shake * 40) * 1.5) : 0;
-      items.push({ baseY: pr.baseY, draw: () => {
-        if (alpha <= 0) return;
-        crisp.globalAlpha = alpha;
-        crisp.drawImage(pr.img, pr.x + sx, pr.y);
-        crisp.globalAlpha = 1;
-      } });
+      const sx = pr.x - cam;
+      if (sx > VW || sx + pr.img.width < 0) continue;
+      const shake = pr.shake > 0 ? Math.round(Math.sin(pr.shake * 40) * 1.5) : 0;
+      items.push({ baseY: pr.baseY, draw: () => ctx.drawImage(pr.img, sx + shake, pr.y) });
+    }
+    if (withPlayer) {
+      const p = this.player;
+      const { img, bob } = this.girlFrame();
+      const gx = Math.round(p.x) - cam, gy = Math.round(p.y) + bob;
+      items.push({ baseY: p.y + GIRL_H - 1, draw: () => { ctx.drawImage(this.girlShadow, gx, gy - bob + GIRL_H - 2); ctx.drawImage(img, gx, gy); } });
     }
     items.sort((a, b) => a.baseY - b.baseY);
     for (const it of items) it.draw();
+  }
+
+  render(crisp: CanvasRenderingContext2D, soft: CanvasRenderingContext2D, haze: CanvasRenderingContext2D): void {
+    const cam = Math.round(this.camX);
+
+    // Capa borrosa: fondo suave + luces bokeh flotando (solo se ve en el menú).
+    soft.drawImage(this.softStatic, 0, 0);
+    if (this.focus > 0) {
+      for (const b of this.bokeh) {
+        const a = 0.08 + 0.08 * (0.5 + 0.5 * Math.sin(this.t * 0.7 + b.ph));
+        soft.fillStyle = `rgba(${b.col},${a.toFixed(3)})`;
+        soft.beginPath();
+        soft.arc(b.x, b.y, b.r, 0, 6.2832);
+        soft.fill();
+      }
+    }
+
+    // Capa nítida: en el menú, la composición enmascarada; en el juego, la viva.
+    crisp.clearRect(0, 0, VW, VH);
+    if (this.focus > 0) {
+      crisp.drawImage(this.menuBack, 0, 0);
+      const { img, bob } = this.girlFrame();
+      const gx = Math.round(this.player.x) - cam, gy = Math.round(this.player.y) + bob;
+      crisp.drawImage(this.girlShadow, gx, gy - bob + GIRL_H - 2);
+      crisp.drawImage(img, gx, gy);
+    }
+    if (this.focus < 1) {
+      this.compose(this.frame, true);
+      crisp.globalAlpha = 1 - this.focus;
+      crisp.drawImage(this.frame.canvas, 0, 0);
+      crisp.globalAlpha = 1;
+    }
 
     if (this.nearProp && this.mode === 'game') {
       const m = this.nearProp;
-      crisp.drawImage(this.marker, m.cx - 4, m.baseY - m.r * 2 - 14 + Math.round(Math.sin(this.t * 4) * 1.2));
+      crisp.drawImage(this.marker, m.cx - cam - 4, m.baseY - m.r * 2 - 14 + Math.round(Math.sin(this.t * 4) * 1.2));
     }
     for (const c of this.critters) {
       if (c.t < 0) continue;
-      const x = Math.round(c.x), y = Math.round(c.y);
+      const x = Math.round(c.x) - cam, y = Math.round(c.y);
       crisp.fillStyle = c.col;
       if (c.kind === 'puff') {
         crisp.globalAlpha = Math.max(0, 1 - c.t / c.life);
@@ -377,11 +440,9 @@ export class TitleScene {
         crisp.globalAlpha = 1;
       } else if (c.kind === 'butterfly') {
         if (c.t > c.life - 1) crisp.globalAlpha = c.life - c.t;
-        if (Math.sin(c.t * 9 + c.ph) > 0) { crisp.fillRect(x - 1, y, 3, 1); crisp.fillRect(x - 1, y - 1, 1, 1); crisp.fillRect(x + 1, y - 1, 1, 1); }
-        else crisp.fillRect(x, y - 1, 1, 2);
+        drawButterfly(crisp, x, y, Math.sin(c.t * 9 + c.ph) > 0);
         crisp.globalAlpha = 1;
       } else {
-        // Pájaro: cuerpo y alas que baten.
         const up = Math.sin(c.t * 11 + c.ph) > 0;
         crisp.fillRect(x - 1, y, 3, 1);
         crisp.fillStyle = '#e9dfd6';
@@ -391,54 +452,48 @@ export class TitleScene {
         crisp.fillRect(x + (c.vx > 0 ? 2 : -2), y, 1, 1);
       }
     }
+    for (const b of this.flies) {
+      crisp.fillStyle = b.col;
+      drawButterfly(crisp, Math.round(b.x) - cam, Math.round(b.y), Math.sin(this.t * 9 + b.ph) > 0);
+    }
 
+    // Pétalos ambientales (pantalla), racimo del frente y flores al viento.
     for (const p of this.petals) {
       const x = Math.round(p.x), y = Math.round(p.y);
       crisp.fillStyle = p.col;
-      if (p.kind === 0) {
-        crisp.fillRect(x, y, 2, 2);
-      } else if (p.kind === 1) {
-        crisp.fillRect(x, y, 2, 1);
-        crisp.fillRect(x + 1, y + 1, 2, 1);
-      } else {
-        crisp.fillRect(x - 1, y, 3, 1);
-        crisp.fillRect(x, y - 1, 1, 3);
-        crisp.fillStyle = C.flowerCenter;
-        crisp.fillRect(x, y, 1, 1);
-      }
+      if (p.kind === 0) crisp.fillRect(x, y, 2, 2);
+      else if (p.kind === 1) { crisp.fillRect(x, y, 2, 1); crisp.fillRect(x + 1, y + 1, 2, 1); }
+      else { crisp.fillRect(x - 1, y, 3, 1); crisp.fillRect(x, y - 1, 1, 3); crisp.fillStyle = C.flowerCenter; crisp.fillRect(x, y, 1, 1); }
     }
-
     if (this.frontAlpha > 0) {
       crisp.globalAlpha = this.frontAlpha;
       crisp.drawImage(this.front, 0, 0);
       crisp.globalAlpha = 1;
+      for (const s of this.sparkles) {
+        const a = Math.sin(this.t * s.w + s.ph) * this.frontAlpha;
+        if (a <= 0.3) continue;
+        crisp.fillStyle = `rgba(255,255,255,${(a * 0.95).toFixed(3)})`;
+        crisp.fillRect(s.x, s.y, 1, 1);
+        if (a > 0.85) {
+          crisp.fillStyle = `rgba(255,255,255,${((a - 0.85) * 4).toFixed(3)})`;
+          crisp.fillRect(s.x - 1, s.y, 1, 1); crisp.fillRect(s.x + 1, s.y, 1, 1);
+          crisp.fillRect(s.x, s.y - 1, 1, 1); crisp.fillRect(s.x, s.y + 1, 1, 1);
+        }
+      }
     }
     for (const f of this.flyers) {
       if (f.near || this.gameT < f.delay) continue;
       crisp.drawImage(f.img, Math.round(f.x - f.img.width / 2), Math.round(f.y - f.img.height / 2));
     }
-
-    for (const s of this.sparkles) {
-      const a = Math.sin(this.t * s.w + s.ph) * this.frontAlpha;
-      if (a <= 0.3) continue;
-      crisp.fillStyle = `rgba(255,255,255,${(a * 0.95).toFixed(3)})`;
-      crisp.fillRect(s.x, s.y, 1, 1);
-      if (a > 0.85) {
-        crisp.fillStyle = `rgba(255,255,255,${((a - 0.85) * 4).toFixed(3)})`;
-        crisp.fillRect(s.x - 1, s.y, 1, 1); crisp.fillRect(s.x + 1, s.y, 1, 1);
-        crisp.fillRect(s.x, s.y - 1, 1, 1); crisp.fillRect(s.x, s.y + 1, 1, 1);
-      }
-    }
     crisp.drawImage(this.overlay, 0, 0);
 
-    // Capa de niebla: bancos que derivan + rayos de luz desde arriba a la izquierda.
+    // Capa de niebla: flores fuera de foco, bancos de bruma y rayos de sol.
     haze.clearRect(0, 0, SW, SH);
     if (this.frontAlpha > 0) {
       haze.globalAlpha = this.frontAlpha;
       haze.drawImage(this.frontSoft, 0, 0);
       haze.globalAlpha = 1;
     }
-    // Flores que pasan muy cerca de la cámara: grandes y borrosas.
     for (const f of this.flyers) {
       if (!f.near || this.gameT < f.delay) continue;
       const w = f.img.width * 0.45, h = f.img.height * 0.45;
@@ -462,16 +517,12 @@ export class TitleScene {
     haze.beginPath(); haze.moveTo(-4, -2); haze.lineTo(14, -2); haze.lineTo(56, 45); haze.lineTo(30, 45); haze.closePath(); haze.fill();
     haze.fillStyle = `rgba(255,246,200,${(0.06 + 0.05 * (1 - pulse)).toFixed(3)})`;
     haze.beginPath(); haze.moveTo(18, -2); haze.lineTo(26, -2); haze.lineTo(70, 45); haze.lineTo(58, 45); haze.closePath(); haze.fill();
-
-    // Mariposas.
-    for (const b of this.flies) {
-      const x = Math.round(b.x), y = Math.round(b.y);
-      const open = Math.sin(this.t * 9 + b.ph) > 0;
-      crisp.fillStyle = b.col;
-      if (open) { crisp.fillRect(x - 1, y, 3, 1); crisp.fillRect(x - 1, y - 1, 1, 1); crisp.fillRect(x + 1, y - 1, 1, 1); }
-      else { crisp.fillRect(x, y - 1, 1, 2); }
-    }
   }
+}
+
+function drawButterfly(ctx: CanvasRenderingContext2D, x: number, y: number, open: boolean): void {
+  if (open) { ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x - 1, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1); }
+  else ctx.fillRect(x, y - 1, 1, 2);
 }
 
 // ───────────────────────── utilidades de color ─────────────────────────
@@ -484,10 +535,8 @@ function fogged(c: string, k: number): RGBA {
 
 // ───────────────────────── fondo ─────────────────────────
 
-// Degradado vertical con tramado de tablero: cielo pixel art sin bandas duras.
+// Degradado vertical con tramado fino: cielo pixel art sin bandas duras.
 function paintSky(pb: PixelBuffer): void {
-  // Muchos escalones intermedios y tramado solo en la franja central de cada
-  // uno: la textura de tablero casi no se nota.
   const base = [C.skyTop, C.skyMid, C.skyLow, C.skyHorizon].map((c) => hex(c));
   const stops: RGBA[] = [];
   for (let i = 0; i < base.length - 1; i++) {
@@ -509,25 +558,23 @@ function paintSky(pb: PixelBuffer): void {
 
 // Ciudad al fondo, casi disuelta en la neblina: dos filas de edificios;
 // la de atrás más alta y más tenue. La bruma es más densa cerca del suelo.
-function paintCity(pb: PixelBuffer, rng: Rng): void {
-  const rows: [number, number, number, number][] = [[0.9, 26, 70, 0.02], [0.82, 14, 44, 0.05]]; // [niebla, alto mín, alto máx, prob. ventana]
+function paintCity(pb: PixelBuffer, rng: Rng, width: number): void {
+  const rows: [number, number, number, number][] = [[0.9, 26, 70, 0.02], [0.82, 14, 44, 0.05]];
   for (const [k0, hMin, hMax, win] of rows) {
     let x = -8 + rng.int(6);
-    while (x < VW + 4) {
+    while (x < width + 4) {
       const w = 9 + rng.int(18), h = hMin + rng.int(hMax - hMin);
       const top = HORIZON - h;
       const tone = rng.pick([C.lilacDeep, C.canopyShade, C.trunkDark]);
       for (let y = top; y < HORIZON; y++) {
         const k = Math.min(0.96, k0 + ((y - top) / h) * 0.09);
         pb.hline(x, x + w - 1, y, fogged(tone, k));
-        // Ventanas: puntos apenas más oscuros, en rejilla.
         if (y > top + 2 && (y - top) % 3 === 0) {
           for (let wx = x + 2; wx < x + w - 1; wx += 3) {
             if (rng.next() < win * 8) pb.set(wx, y, fogged(C.lilacDeep, k - 0.06));
           }
         }
       }
-      // Azotea: cornisa un poco más clara y, a veces, una antena.
       pb.hline(x, x + w - 1, top, fogged(C.lilacLight, k0 - 0.05));
       if (rng.next() < 0.3) pb.rect(x + 1 + rng.int(Math.max(1, w - 2)), top - 2 - rng.int(4), 1, 4, fogged(tone, k0));
       x += w + rng.int(3);
@@ -535,11 +582,10 @@ function paintCity(pb: PixelBuffer, rng: Rng): void {
   }
 }
 
-// Árboles lejanos perdidos en la bruma, para dar profundidad.
-function paintDistance(pb: PixelBuffer, rng: Rng): void {
-  paintCity(pb, rng);
-  const trees: [number, number, number][] = [[60, 118, 0.8], [118, 124, 0.86], [205, 120, 0.84]];
-  for (const [x, y, k] of trees) {
+// Árboles lejanos perdidos en la bruma.
+function paintDistantTrees(pb: PixelBuffer, rng: Rng, width: number): void {
+  for (let x = 30 + rng.int(40); x < width; x += 70 + rng.int(90)) {
+    const y = 112 + rng.int(18), k = 0.78 + rng.next() * 0.1;
     pb.rect(x - 1, y, 3, HORIZON - y + 2, fogged(C.trunkDark, k));
     for (let i = 0; i < 7; i++) {
       const a = rng.range(0, 6.28), d = rng.range(0, 14);
@@ -552,66 +598,66 @@ function paintGround(pb: PixelBuffer, rng: Rng): void {
   // El suelo se aclara hacia el horizonte (más bruma).
   for (let y = HORIZON; y < VH; y++) {
     const k = 0.55 * (1 - (y - HORIZON) / (VH - HORIZON));
-    pb.hline(0, VW - 1, y, fogged(C.groundDark, k));
+    pb.hline(0, WORLD_W - 1, y, fogged(C.groundDark, k));
   }
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 40 * (WORLD_W / VW); i++) {
     const y = rng.range(HORIZON, VH);
     const k = 0.5 * (1 - (y - HORIZON) / (VH - HORIZON));
-    pb.ellipse(rng.int(VW), y, 6 + rng.int(14), 2 + rng.int(3), fogged(rng.pick([C.ground, C.groundLight]), k));
+    pb.ellipse(rng.int(WORLD_W), y, 6 + rng.int(14), 2 + rng.int(3), fogged(rng.pick([C.ground, C.groundLight]), k));
   }
-  // Camino que viene de abajo a la izquierda hacia la base del tronco.
-  const path: Pt[] = [[104, VH + 2], [156, VH + 2], [TRUNK.x + 5, TRUNK.base], [TRUNK.x - 9, TRUNK.base]];
-  pb.poly(path, fogged(C.pathDark, 0.15));
-  pb.poly([[110, VH + 2], [150, VH + 2], [TRUNK.x + 3, TRUNK.base + 1], [TRUNK.x - 7, TRUNK.base + 1]], fogged(C.path, 0.15));
-  for (let i = 0; i < 26; i++) {
-    const t = rng.next(), y = VH - t * (VH - TRUNK.base - 1);
-    const cx = 130 + (TRUNK.x - 2 - 130) * t, half = (20 - 14 * t);
-    const x = Math.round(cx + rng.range(-half, half));
-    pb.rect(x, Math.round(y), rng.next() < 0.5 ? 2 : 1, 1, fogged(rng.next() < 0.6 ? C.pathLight : C.pebble, 0.2));
+  // El paseo: una vereda que cruza todo el mundo.
+  const top = 167, bottom = 178;
+  pb.rect(0, top, WORLD_W, bottom - top + 1, fogged(C.pathDark, 0.12));
+  pb.rect(0, top + 1, WORLD_W, bottom - top - 1, fogged(C.path, 0.12));
+  for (let i = 0; i < WORLD_W / 3; i++) {
+    const x = rng.int(WORLD_W), y = top + 1 + rng.int(bottom - top - 1);
+    pb.rect(x, y, rng.next() < 0.5 ? 2 : 1, 1, fogged(rng.next() < 0.6 ? C.pathLight : C.pebble, 0.15));
   }
-  // Matas de pasto y pétalos caídos.
-  for (let i = 0; i < 70; i++) {
-    const x = rng.int(VW), y = HORIZON + 2 + rng.int(VH - HORIZON - 2);
+  for (let x = 0; x < WORLD_W; x++) {
+    if (rng.next() < 0.35) pb.set(x, top - 1, fogged(C.pathDark, 0.2));
+    if (rng.next() < 0.35) pb.set(x, bottom + 1, fogged(C.pathDark, 0.2));
+  }
+  // Senda curva que sube de la vereda a la base del árbol grande.
+  const T = MAIN_TREE;
+  pb.poly([[118, top + 1], [150, top + 1], [T.x + 5, T.base], [T.x - 9, T.base]], fogged(C.pathDark, 0.15));
+  pb.poly([[122, top + 1], [146, top + 1], [T.x + 3, T.base + 1], [T.x - 7, T.base + 1]], fogged(C.path, 0.15));
+  // Matas de pasto y pétalos caídos (más cerca de los árboles).
+  for (let i = 0; i < 70 * (WORLD_W / VW); i++) {
+    const x = rng.int(WORLD_W), y = HORIZON + 2 + rng.int(VH - HORIZON - 2);
+    if (y >= top - 1 && y <= bottom + 1) continue;
     const col = fogged(rng.pick([C.leaf, C.leafLight, C.groundLight]), 0.3);
     pb.set(x, y, col); pb.set(x + 2, y, col); pb.set(x + 1, y + 1, col);
   }
-  for (let i = 0; i < 60; i++) {
-    const x = rng.int(VW), y = HORIZON + rng.int(VH - HORIZON);
-    pb.set(x, y, hex(rng.pick(PETAL_COLS)));
+  for (const [tx, n] of [[160, 60], [640, 30], [1090, 26]] as Pt[]) {
+    for (let i = 0; i < n; i++) pb.set(tx + Math.round(rng.range(-90, 90)), HORIZON + rng.int(VH - HORIZON), hex(rng.pick(PETAL_COLS)));
   }
 }
 
-// ───────────────────────── árbol ─────────────────────────
+// ───────────────────────── árboles ─────────────────────────
 
-function paintTrunk(pb: PixelBuffer): void {
-  // Raíces y base.
-  pb.ellipse(TRUNK.x, TRUNK.base + 2, 13, 2, hex(C.shadow, 70));
-  pb.ellipse(TRUNK.x, TRUNK.base + 1, 10, 2, fogged(C.trunkDark, 0.12));
-  for (const [dx, len] of [[-9, 3], [-5, 4], [4, 4], [9, 3]] as [number, number][]) {
-    pb.rect(TRUNK.x + dx, TRUNK.base - 1, len, 2, fogged(C.trunk, 0.12));
+function paintTrunkAt(pb: PixelBuffer, x: number, base: number, top: number, halfBase: number, branches: [Pt, Pt][]): void {
+  pb.ellipse(x, base + 2, halfBase + 5, 2, hex(C.shadow, 70));
+  pb.ellipse(x, base + 1, halfBase + 2, 2, fogged(C.trunkDark, 0.12));
+  for (const [dx, len] of [[-halfBase - 1, 3], [-Math.round(halfBase * 0.6), 4], [Math.round(halfBase * 0.5), 4], [halfBase + 1, 3]] as Pt[]) {
+    pb.rect(x + dx, base - 1, len, 2, fogged(C.trunk, 0.12));
   }
-  // Tronco: ancho abajo, estrecho arriba, con luz a la izquierda.
-  for (let y = TRUNK.base; y >= TRUNK.top; y--) {
-    const t = (TRUNK.base - y) / (TRUNK.base - TRUNK.top);
-    const half = Math.round(8 - 4.5 * t);
-    const cx = TRUNK.x + Math.round(Math.sin(t * 2.2) * 3);
+  for (let y = base; y >= top; y--) {
+    const t = (base - y) / (base - top);
+    const half = Math.round(halfBase - halfBase * 0.55 * t);
+    const cx = x + Math.round(Math.sin(t * 2.2) * 3 * (halfBase / 8));
     pb.hline(cx - half, cx + half, y, fogged(C.trunkDark, 0.12));
     pb.hline(cx - half + 1, cx + half - 3, y, fogged(C.trunk, 0.12));
     pb.hline(cx - half + 2, cx - half + 3, y, fogged(C.trunkLight, 0.12));
   }
-  // Ramas principales que se pierden entre las flores.
-  const branches: [Pt, Pt][] = [[[TRUNK.x - 2, 104], [112, 66]], [[TRUNK.x - 1, 100], [156, 44]], [[TRUNK.x + 2, 104], [231, 62]], [[TRUNK.x + 3, 110], [248, 104]]];
   for (const [a, b] of branches) {
     for (let t = 0; t <= 1; t += 0.03) {
-      const x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
-      pb.circle(x, y, Math.max(1, Math.round(3.5 - 2.5 * t)), fogged(C.trunkDark, 0.12 + 0.2 * t));
-      if (t < 0.7) pb.set(Math.round(x) - 1, Math.round(y) - 1, fogged(C.trunk, 0.12));
+      const bx = a[0] + (b[0] - a[0]) * t, by = a[1] + (b[1] - a[1]) * t;
+      pb.circle(bx, by, Math.max(1, Math.round((3.5 - 2.5 * t) * Math.min(1, halfBase / 8))), fogged(C.trunkDark, 0.12 + 0.2 * t));
+      if (t < 0.7) pb.set(Math.round(bx) - 1, Math.round(by) - 1, fogged(C.trunk, 0.12));
     }
   }
 }
 
-// Una flor de lila: cuatro pétalos redondos y un punto central.
-// s = 1 → 3×3 · s = 2 → 7×7 · s = 3 → 11×11. `light` 0..1 = qué tan iluminada.
 function floret(pb: PixelBuffer, x: number, y: number, s: number, k: number, light: number, rng: Rng): void {
   const d = s, pr = s - 1;
   const shades = light > 0.66 ? [C.lilacPale, C.lilacLight, C.lilac]
@@ -632,12 +678,10 @@ function bud(pb: PixelBuffer, x: number, y: number, k: number): void {
   pb.set(x, y + 1, fogged(C.budDark, k)); pb.set(x + 1, y + 1, fogged(C.budDark, k));
 }
 
-// Racimo (panícula): cono desde la base (x, y) hacia la punta, largo h,
-// ancho w, inclinado `tilt` radianes (0 = apunta hacia arriba).
+// Racimo (panícula): cono desde la base (x, y) hacia la punta.
 function panicle(pb: PixelBuffer, rng: Rng, x: number, y: number, h: number, w: number, tilt: number, s: number, k: number, count: number, dew?: Pt[]): void {
   const ax = Math.sin(tilt), ay = -Math.cos(tilt);
   const px = Math.cos(tilt), py = Math.sin(tilt);
-  // Masa de sombra detrás de las flores para que no se vea el cielo entre ellas.
   const mx = x + ax * h * 0.42, my = y + ay * h * 0.42;
   pb.ellipse(mx + 1, my + 2, Math.round(w * 0.42), Math.round(h * 0.4), fogged(C.canopyShade, k));
   pb.ellipse(mx, my, Math.round(w * 0.4), Math.round(h * 0.38), fogged(C.lilacDeep, k * 0.7 + 0.15));
@@ -656,52 +700,63 @@ function panicle(pb: PixelBuffer, rng: Rng, x: number, y: number, h: number, w: 
   }
 }
 
-function paintCanopy(pb: PixelBuffer, rng: Rng, dew: Pt[]): void {
-  // Masa base: hojas y sombra lila para que la copa se sienta densa.
-  for (let i = 0; i < 70; i++) {
-    const x = rng.range(-20, VW + 20), y = rng.range(-30, 112);
-    const edge = y > 95 ? (y - 95) / 17 : 0;
-    if (rng.next() < edge) continue;
-    const r = 9 + rng.int(14);
+// Copa de lilas dentro de una elipse (cx, cy, hw, hh). `scale` reduce el tamaño de los racimos.
+function paintCanopyAt(pb: PixelBuffer, rng: Rng, dew: Pt[], cx: number, cy: number, hw: number, hh: number, scale: number): void {
+  // Densidad relativa al árbol grande; los chicos no bajan de la mitad para no verse ralos.
+  const area = Math.max(0.55, (hw * hh) / (200 * 82));
+  const pick = (m = 1): Pt => {
+    for (;;) {
+      const x = cx + rng.range(-hw, hw) * m, y = cy + rng.range(-hh, hh) * m;
+      const nx = (x - cx) / hw, ny = (y - cy) / hh;
+      if (nx * nx + ny * ny <= 1) return [x, y];
+    }
+  };
+  for (let i = 0; i < 70 * area; i++) {
+    const [x, y] = pick();
+    const r = Math.round((9 + rng.int(14)) * scale);
     pb.circle(x, y, r, fogged(rng.pick([C.lilacMid, C.canopyShade, C.canopyBase, C.lilacMid]), 0.42));
-    // Moteado: rompe la silueta plana del disco.
     for (let j = 0; j < r * 3; j++) {
       const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * r;
       pb.set(Math.round(x + Math.cos(a) * d), Math.round(y + Math.sin(a) * d), fogged(rng.pick([C.lilacLight, C.lilacDark, C.leaf]), 0.45));
     }
   }
-  for (let i = 0; i < 90; i++) {
-    const x = rng.range(-10, VW + 10), y = rng.range(-10, 110);
+  for (let i = 0; i < 90 * area; i++) {
+    const [x, y] = pick();
     const col = fogged(rng.pick([C.leafDark, C.leaf, C.leafLight]), 0.3);
-    pb.set(x, y, col); pb.set(x + 1, y, col); pb.set(x, y + 1, col); pb.set(x + 1, y + 1, col); pb.set(x + 1, y - 1, col);
+    const ix = Math.round(x), iy = Math.round(y);
+    pb.set(ix, iy, col); pb.set(ix + 1, iy, col); pb.set(ix, iy + 1, col); pb.set(ix + 1, iy + 1, col); pb.set(ix + 1, iy - 1, col);
   }
-  // Racimos lejanos (pequeños, brumosos).
-  for (let i = 0; i < 46; i++) {
-    const x = rng.range(-10, VW + 10), y = rng.range(6, 108);
-    panicle(pb, rng, x, y, rng.range(14, 22), rng.range(10, 16), rng.range(-0.9, 0.9), 1, 0.5, 34);
+  for (let i = 0; i < 46 * area; i++) {
+    const [x, y] = pick();
+    panicle(pb, rng, x, y, rng.range(14, 22) * scale, rng.range(10, 16) * scale, rng.range(-0.9, 0.9), 1, 0.5, 34);
   }
-  // Racimos medios.
-  for (let i = 0; i < 44; i++) {
-    const x = rng.range(-6, VW + 6), y = rng.range(10, 116);
-    panicle(pb, rng, x, y, rng.range(22, 34), rng.range(14, 22), rng.range(-0.8, 0.8), rng.next() < 0.4 ? 2 : 1, 0.25, 50);
+  for (let i = 0; i < 44 * area; i++) {
+    const [x, y] = pick();
+    panicle(pb, rng, x, y, rng.range(22, 34) * scale, rng.range(14, 22) * scale, rng.range(-0.8, 0.8), rng.next() < 0.4 && scale > 0.8 ? 2 : 1, 0.25, 50);
   }
-  // Racimos cercanos: grandes, con flores de 4 pétalos bien visibles.
-  const near: [number, number, number][] = [
-    [24, 96, -0.5], [62, 72, -0.2], [98, 50, 0.1], [128, 84, -0.1], [160, 60, 0.3], [186, 96, 0.4], [214, 74, 0.5],
-    [84, 108, -0.3], [246, 100, 0.6], [150, 24, 0.0], [40, 40, -0.6], [200, 30, 0.35], [280, 70, 0.5], [300, 110, 0.7],
-  ];
-  for (const [x, y, tilt] of near) {
-    panicle(pb, rng, x, y, rng.range(36, 48), rng.range(24, 32), tilt, 2, 0.06, 70, dew);
+  for (let i = 0; i < 14 * area; i++) {
+    const [x, y] = pick(0.9);
+    panicle(pb, rng, x, y, rng.range(36, 48) * scale, rng.range(24, 32) * scale, rng.range(-0.6, 0.6), scale > 0.8 ? 2 : 1, 0.06, 70, dew);
   }
 }
 
-// ───────────────────────── arbustos e interacción ─────────────────────────
+// ───────────────────────── objetos del paseo ─────────────────────────
 
-// [centro x, base y, radio]. Evitan el camino y la base del tronco.
-const BUSHES: [number, number, number][] = [
-  [16, 176, 11], [52, 163, 9], [86, 173, 10], [30, 156, 7], [122, 156, 7],
-  [196, 175, 11], [232, 161, 9], [268, 177, 12], [300, 159, 8], [250, 153, 7], [178, 178, 8],
-];
+// [centro x, base y, radio]. Los del primer tramo son fijos; el resto se reparte
+// por el mundo evitando troncos, faroles, banca y puerta.
+function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
+  const spots: [number, number, number][] = [
+    [16, 176, 11], [52, 163, 9], [86, 173, 10], [30, 156, 7], [122, 156, 7],
+    [196, 175, 11], [232, 161, 9], [268, 177, 12], [300, 159, 8], [250, 153, 7], [178, 178, 8],
+  ];
+  for (let x = 350; x < 1225; x += 46 + rng.int(34)) {
+    const r = 7 + rng.int(6);
+    const baseY = 153 + rng.int(26);
+    if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
+    spots.push([x, baseY, r]);
+  }
+  return spots;
+}
 
 // Burbuja con la J que aparece sobre el arbusto cercano.
 const MARKER_ROWS = [
@@ -738,17 +793,60 @@ function renderBush(rng: Rng, r: number): PixelBuffer {
   return pb;
 }
 
-// Valor de la máscara de enfoque en un punto (1 nítido … 0 borroso).
-function focusAt(x: number, y: number): number {
-  const dx = (x - FOCUS.x) / FOCUS.aspect, dy = y - FOCUS.y;
-  const d = Math.sqrt(dx * dx + dy * dy);
-  return Math.max(0, Math.min(1, (FOCUS.outer - d) / (FOCUS.outer - FOCUS.inner)));
+// Farol de parque: poste fino con lámpara crema.
+function renderLamp(): HTMLCanvasElement {
+  const pb = new PixelBuffer(9, 44);
+  pb.ellipse(4, 42, 4, 1, hex(C.shadow, 60));
+  pb.rect(1, 39, 7, 2, hex(C.trunkDark)); pb.rect(2, 38, 5, 1, hex(C.trunkDark));
+  pb.rect(3, 8, 3, 31, hex(C.trunkDark)); pb.rect(3, 8, 1, 31, hex(C.trunk));
+  pb.rect(2, 1, 5, 1, hex(C.trunkDark)); pb.rect(3, 0, 3, 1, hex(C.trunkDark));
+  pb.rect(1, 2, 7, 6, hex(C.trunkDark)); pb.rect(2, 3, 5, 4, hex('#fff1c2')); pb.rect(3, 4, 2, 2, hex('#fffaf0'));
+  return pb.toCanvas();
 }
 
-function PixelBuffer_from(c: HTMLCanvasElement): PixelBuffer {
-  const pb = new PixelBuffer(c.width, c.height);
-  pb.data.set(c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data);
-  return pb;
+// Banca de madera.
+function renderBench(): HTMLCanvasElement {
+  const pb = new PixelBuffer(26, 15);
+  pb.ellipse(13, 13, 12, 1, hex(C.shadow, 60));
+  const light = hex('#b58f68'), wood = hex('#95724f'), dark = hex('#5f4a3c');
+  pb.rect(1, 0, 24, 2, light); pb.rect(1, 3, 24, 2, wood);
+  pb.rect(2, 2, 2, 1, dark); pb.rect(22, 2, 2, 1, dark);
+  pb.rect(0, 6, 26, 3, light); pb.rect(0, 8, 26, 1, wood);
+  pb.rect(2, 9, 2, 4, dark); pb.rect(22, 9, 2, 4, dark);
+  pb.rect(3, 5, 1, 1, dark); pb.rect(22, 5, 1, 1, dark);
+  return pb.toCanvas();
+}
+
+// Puerta de jardín al final del paseo (por ahora, cerrada).
+function renderGate(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(34, 40);
+  pb.ellipse(17, 38, 16, 2, hex(C.shadow, 60));
+  const post = hex(C.trunkDark), postL = hex(C.trunk);
+  pb.rect(0, 6, 4, 32, post); pb.rect(1, 6, 1, 32, postL);
+  pb.rect(30, 6, 4, 32, post); pb.rect(31, 6, 1, 32, postL);
+  for (let x = 0; x < 34; x++) {
+    const y = 4 + Math.round(3 * Math.pow((x - 17) / 17, 2));
+    pb.rect(x, y, 1, 3, post);
+  }
+  for (let x = 6; x < 29; x += 4) pb.rect(x, 14, 1, 23, post);
+  pb.rect(4, 22, 26, 1, post); pb.rect(4, 32, 26, 1, post);
+  for (let i = 0; i < 14; i++) {
+    const x = 2 + rng.int(30), y = 2 + rng.int(9);
+    floret(pb, x, y, 1, 0.05, rng.range(0.3, 1), rng);
+  }
+  for (let i = 0; i < 10; i++) pb.set(rng.int(34), 5 + rng.int(6), hex(C.leaf));
+  return pb.toCanvas();
+}
+
+function cropToContent(pb: PixelBuffer): { pb: PixelBuffer; x: number; y: number } {
+  let x0 = pb.w, y0 = pb.h, x1 = -1, y1 = -1;
+  for (let y = 0; y < pb.h; y++) for (let x = 0; x < pb.w; x++) {
+    if (pb.data[(y * pb.w + x) * 4 + 3] === 0) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const out = new PixelBuffer(x1 - x0 + 1, y1 - y0 + 1);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out.set(x - x0, y - y0, pb.get(x, y));
+  return { pb: out, x: x0, y: y0 };
 }
 
 // ───────────────────────── primer plano: la foto ─────────────────────────
@@ -756,12 +854,17 @@ function PixelBuffer_from(c: HTMLCanvasElement): PixelBuffer {
 interface Tone { light: string; mid: string; dark: string; deep: string }
 const TONE_LILAC: Tone = { light: '#ebe3f9', mid: '#c9b6ec', dark: '#a893dc', deep: '#8a72c4' };
 const TONE_PINK: Tone = { light: '#f1e6f8', mid: '#d4bceb', dark: '#b89ad8', deep: '#9776bf' };
-// Luz desde arriba a la izquierda.
 const LIGHT: Pt = [-0.707, -0.707];
 // Círculos que definen el volumen del racimo de primer plano.
 const FG_MASS: [number, number, number][] = [[275, 105, 46], [300, 60, 38], [258, 150, 36], [300, 150, 40], [270, 30, 30], [318, 105, 34], [236, 120, 22]];
+const FG_WEIGHTS = FG_MASS.map(([, , r]) => r * r);
+const FG_TOTAL = FG_WEIGHTS.reduce((a, b) => a + b, 0);
+function pickMass(rng: Rng): [number, number, number] {
+  let u = rng.next() * FG_TOTAL;
+  for (let i = 0; i < FG_MASS.length; i++) { u -= FG_WEIGHTS[i]; if (u <= 0) return FG_MASS[i]; }
+  return FG_MASS[FG_MASS.length - 1];
+}
 
-// Sprites sueltos para el viento.
 function renderFloret(rng: Rng, S: number, rot: number): HTMLCanvasElement {
   const size = Math.ceil(S * 2.3) + 4;
   const pb = new PixelBuffer(size, size);
@@ -771,13 +874,12 @@ function renderFloret(rng: Rng, S: number, rot: number): HTMLCanvasElement {
 function renderPetal(col: string, kind: number): HTMLCanvasElement {
   const pb = new PixelBuffer(3, 2);
   const c = hex(col);
-  if (kind === 0) { pb.rect(0, 0, 2, 2, c); }
+  if (kind === 0) pb.rect(0, 0, 2, 2, c);
   else { pb.rect(0, 0, 2, 1, c); pb.rect(1, 1, 2, 1, c); }
   return pb.toCanvas();
 }
 
 // Pétalo: elipse alargada que se afina hacia la punta, rotada `ang`.
-// `lit` (-1..1) = cuánto mira hacia la luz. `solid` pinta silueta plana.
 function petal(pb: PixelBuffer, cx: number, cy: number, S: number, ang: number, tone: Tone, lit: number, k: number, solid?: RGBA): void {
   const ra = S * 0.5, rb0 = S * 0.31;
   const dx = Math.cos(ang), dy = Math.sin(ang);
@@ -794,17 +896,11 @@ function petal(pb: PixelBuffer, cx: number, cy: number, S: number, ang: number, 
       if (solid) { pb.set(x, y, solid); continue; }
       const chk = (x + y) & 1;
       let col: string;
-      if (e > 0.68) {
-        col = lit > 0.15 ? tone.light : lit < -0.3 ? tone.dark : chk ? tone.light : tone.mid;
-      } else if (Math.abs(v) < rb * 0.22 && u < ra * 0.35) {
-        col = u < -ra * 0.3 ? tone.deep : chk ? tone.dark : tone.mid;
-      } else if (lit > 0.4) {
-        col = chk && e > 0.4 ? tone.light : tone.mid;
-      } else if (lit < -0.3) {
-        col = chk ? tone.mid : tone.dark;
-      } else {
-        col = tone.mid;
-      }
+      if (e > 0.68) col = lit > 0.15 ? tone.light : lit < -0.3 ? tone.dark : chk ? tone.light : tone.mid;
+      else if (Math.abs(v) < rb * 0.22 && u < ra * 0.35) col = u < -ra * 0.3 ? tone.deep : chk ? tone.dark : tone.mid;
+      else if (lit > 0.4) col = chk && e > 0.4 ? tone.light : tone.mid;
+      else if (lit < -0.3) col = chk ? tone.mid : tone.dark;
+      else col = tone.mid;
       pb.set(x, y, fogged(col, k));
     }
   }
@@ -812,12 +908,11 @@ function petal(pb: PixelBuffer, cx: number, cy: number, S: number, ang: number, 
 
 function dewDrop(pb: PixelBuffer, x: number, y: number, r: number, k: number): void {
   pb.circle(x, y, r, [255, 255, 255, 105]);
-  pb.set(x + r, y + r - 1, fogged(C.lilacDeep, k).map((c, i) => (i === 3 ? 120 : c)) as RGBA);
+  const rim = fogged(C.lilacDeep, k);
+  pb.set(x + r, y + r - 1, [rim[0], rim[1], rim[2], 120]);
   pb.set(x - 1, y - 1, [255, 255, 255, 235]);
 }
 
-// Flor de lila grande: 4 pétalos (los iluminados encima), garganta oscura,
-// punto amarillo y, si es grande, una gota de rocío.
 function bigFloret(pb: PixelBuffer, rng: Rng, cx: number, cy: number, S: number, rot: number, k: number, dew?: Pt[]): void {
   const tone = rng.next() < 0.3 ? TONE_PINK : TONE_LILAC;
   const petals = [0, 1, 2, 3].map((i) => {
@@ -825,7 +920,6 @@ function bigFloret(pb: PixelBuffer, rng: Rng, cx: number, cy: number, S: number,
     return { ang, lit: -(Math.cos(ang) * -LIGHT[0] + Math.sin(ang) * -LIGHT[1]) };
   });
   petals.sort((a, b) => a.lit - b.lit);
-  // Silueta oscura un píxel más grande: separa esta flor de las de atrás.
   const outline = fogged(tone.deep, k);
   for (const p of petals) petal(pb, cx + 1, cy + 1, S + 1.2, p.ang, tone, p.lit, k, [outline[0], outline[1], outline[2], 150]);
   for (const p of petals) petal(pb, cx, cy, S, p.ang, tone, p.lit, k);
@@ -840,7 +934,6 @@ function bigFloret(pb: PixelBuffer, rng: Rng, cx: number, cy: number, S: number,
   }
 }
 
-// Capullo: óvalo pequeño rosa-lila, más claro en la punta.
 function budBig(pb: PixelBuffer, x: number, y: number, ang: number, len: number, k: number): void {
   const dx = Math.cos(ang), dy = Math.sin(ang);
   const ra = len / 2, rb = Math.max(1.2, len * 0.28);
@@ -855,47 +948,31 @@ function budBig(pb: PixelBuffer, x: number, y: number, ang: number, len: number,
 }
 
 function paintForeground(pb: PixelBuffer, rng: Rng, dew: Pt[]): void {
-  // Sombra entre flores: solo donde el racimo es denso (más chica que las flores).
-  const mass = FG_MASS;
-  for (const [x, y, r] of mass) pb.circle(x, y, r - 7, fogged(C.lilacDeep, 0.1));
-  // Relleno denso de flores medianas, de atrás (más brumosas) hacia adelante.
-  // Muestreo ponderado por área para que los círculos grandes no queden ralos.
-  const weights = mass.map(([, , r]) => r * r);
-  const totalW = weights.reduce((a, b) => a + b, 0);
-  const pickMass = () => {
-    let u = rng.next() * totalW;
-    for (let i = 0; i < mass.length; i++) { u -= weights[i]; if (u <= 0) return mass[i]; }
-    return mass[mass.length - 1];
-  };
+  for (const [x, y, r] of FG_MASS) pb.circle(x, y, r - 7, fogged(C.lilacDeep, 0.1));
   const fill: [number, number, number][] = [];
   for (let i = 0; i < 170; i++) {
-    const [x, y, r] = pickMass();
+    const [x, y, r] = pickMass(rng);
     const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * (r - 3);
     fill.push([Math.round(x + Math.cos(a) * d), Math.round(y + Math.sin(a) * d), 5 + rng.int(4)]);
   }
   fill.sort((a, b) => a[2] - b[2]);
   fill.forEach(([x, y, S], i) => bigFloret(pb, rng, x, y, S, rng.range(0, 1.57), 0.22 - 0.16 * (i / fill.length)));
-  // Flores grandes, de atrás hacia adelante (la protagonista al final).
   const big: [number, number, number, number][] = [
     [218, 68, 8, 0.5], [240, 32, 9, 0.1], [222, 104, 9, 0.7], [286, 30, 10, -0.6], [250, 68, 11, 0.4],
     [316, 112, 12, -0.2], [268, 176, 12, 0.3], [236, 140, 12, -0.3], [308, 176, 11, 0.9], [300, 70, 13, 0.6],
     [292, 152, 14, 0.9], [270, 108, 17, 0.15],
   ];
   for (const [x, y, S, rot] of big) bigFloret(pb, rng, x, y, S, rot, 0.04, dew);
-  // Capullos: racimito abajo a la izquierda y en el borde superior derecho.
   const budSpots: [number, number, number][] = [
     [224, 156, -0.9], [230, 166, -0.6], [219, 170, -1.2], [236, 174, -0.4], [214, 148, -1.4], [242, 164, -0.2],
     [306, 12, 0.8], [316, 22, 1.1], [298, 8, 0.4], [214, 128, -1.0],
   ];
   for (const [x, y, a] of budSpots) budBig(pb, x, y, a, 5 + rng.int(3), 0.06);
-  // Tallitos entre los capullos.
   for (const [x, y] of [[226, 160], [232, 170], [220, 174]] as Pt[]) {
     pb.set(x, y, fogged(C.leafDark, 0.1)); pb.set(x + 1, y + 1, fogged(C.leafDark, 0.1)); pb.set(x + 2, y + 2, fogged(C.leaf, 0.1));
   }
 }
 
-// Flores fuera de foco: se dibujan nítidas aquí y se reducen a 80×45 para la
-// capa `haze`, que las estira con suavizado (borroso de verdad, sin costo).
 function paintForegroundBlur(pb: PixelBuffer, rng: Rng): void {
   const blurry: [number, number, number, number, number][] = [
     [204, 56, 10, 0.3, 0.3], [192, 98, 11, -0.4, 0.3], [206, 138, 10, 0.6, 0.25], [198, 172, 9, 0.1, 0.3],
@@ -904,6 +981,8 @@ function paintForegroundBlur(pb: PixelBuffer, rng: Rng): void {
   for (const [x, y, S, rot, k] of blurry) bigFloret(pb, rng, x, y, S, rot, k);
   for (const [x, y, a] of [[208, 118, -1.1], [200, 152, -0.8], [212, 32, 0.6]] as [number, number, number][]) budBig(pb, x, y, a, 6, 0.3);
 }
+
+// ───────────────────────── capas derivadas ─────────────────────────
 
 function flipX(src: HTMLCanvasElement): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -926,16 +1005,9 @@ function downsample(layer: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-// ───────────────────────── capas derivadas ─────────────────────────
-
 function makeSoft(full: HTMLCanvasElement): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = SW; c.height = SH;
+  const c = downsample(full);
   const ctx = c.getContext('2d')!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(full, 0, 0, SW, SH);
-  // Velo de bruma y luz cálida desde arriba a la izquierda.
   ctx.fillStyle = 'rgba(250,247,252,0.16)';
   ctx.fillRect(0, 0, SW, SH);
   const g = ctx.createRadialGradient(9, 1, 1, 9, 1, 66);
@@ -967,14 +1039,12 @@ function makeOverlay(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = VW; c.height = VH;
   const ctx = c.getContext('2d')!;
-  // Luz de sol cálida desde arriba a la izquierda (nada oscuro: es de día).
   const v = ctx.createRadialGradient(30, 0, 10, 30, 0, 260);
   v.addColorStop(0, 'rgba(255,240,190,0.28)');
   v.addColorStop(0.4, 'rgba(255,244,210,0.10)');
   v.addColorStop(1, 'rgba(255,244,210,0)');
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, VW, VH);
-  // Aclarado bajo el panel del menú (izquierda).
   const l = ctx.createLinearGradient(150, 0, 0, 0);
   l.addColorStop(0, 'rgba(250,247,255,0)');
   l.addColorStop(1, 'rgba(250,247,255,0.45)');

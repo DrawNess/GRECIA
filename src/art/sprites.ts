@@ -1,8 +1,8 @@
 import { sprite } from '../engine/pixels';
 import { C } from './palette';
 
-// Grecia de espaldas, delgada: cabello con partidura, dos trenzas cortas
-// hasta los hombros con lazos lila, vestido beige formal.
+// Grecia de espaldas, delgada: cabello con partidura, dos trencitas cortas
+// a la altura de los hombros con lazos lila, vestido beige formal.
 const GRECIA_PAL = {
   O: C.outline, H: C.hair, h: C.hairLight, k: C.hairDark,
   S: C.skin, s: C.skinShade, D: C.dress, d: C.dressShade, e: C.dressDeep,
@@ -19,14 +19,14 @@ const GRECIA_A = [
   '..OkHHHHHkO.',
   '...OkHHHkO..',
   '...OHWWWHO..',
-  '..ODHDDDHDO.',
-  '..ODkDDDkDO.',
   '..ODRDDDRDO.',
   '..ODrDdDrDO.',
   '..ODDDDDDDO.',
   '..ODDDdDDDO.',
+  '..ODDDDDDDO.',
   '..OSDDDDDSO.',
   '..OSDDdDDSO.',
+  '..ODDDDDDDO.',
   '..ODdDDDdDO.',
   '.ODddDdDddDO',
   '.OeddDdDddeO',
@@ -35,14 +35,7 @@ const GRECIA_A = [
   '...OOO.OOO..',
 ];
 
-// Segundo cuadro de reposo: los lazos de las trenzas se mueven un píxel.
-const GRECIA_B = GRECIA_A.map((row, i) => {
-  if (i === 11) return '..ODrDDDrDO.';
-  if (i === 12) return '..ODRDdDRDO.';
-  return row;
-});
-
-// De frente: flequillo, ojos, trenzas cayendo por delante de los hombros.
+// De frente: flequillo, ojos, trencitas cayendo por delante de los hombros.
 const GRECIA_F = [
   '....OOOO....',
   '...OhhhhO...',
@@ -53,11 +46,11 @@ const GRECIA_F = [
   '..OHSSSSSHO.',
   '..OkSSsSSkO.',
   '..OkOWWWOkO.',
-  '..OkDDDDDkO.',
-  '..OHDDDDDHO.',
-  '..ORDDdDDRO.',
-  '..OrDDDDDrO.',
+  '..ORDDDDDRO.',
+  '..OrDDdDDrO.',
+  '..ODDDDDDDO.',
   '..ODDDdDDDO.',
+  '..ODDDDDDDO.',
   '..OSDDDDDSO.',
   '..OSDDdDDSO.',
   '..ODDDDDDDO.',
@@ -69,7 +62,7 @@ const GRECIA_F = [
   '...OOO.OOO..',
 ];
 
-// De perfil mirando a la derecha: una trenza a la vista sobre la espalda.
+// De perfil mirando a la derecha: una trencita a la vista sobre la espalda.
 const GRECIA_S = [
   '....OOOO....',
   '...OhhhhO...',
@@ -80,10 +73,10 @@ const GRECIA_S = [
   '..OkHHSSSO..',
   '..OkkHSSsO..',
   '..OkOWWWO...',
-  '..OkODDDDO..',
-  '..OkODDDDO..',
   '..ORODDDDO..',
-  '..OrODDdDO..',
+  '..OrODDDDO..',
+  '...ODDDDDO..',
+  '...ODDDdDO..',
   '...ODDDdDO..',
   '...ODSDdDO..',
   '...ODSDdDO..',
@@ -96,24 +89,51 @@ const GRECIA_S = [
   '....OOOOO...',
 ];
 
-// Ciclo de caminata: dos cuadros (piernas abiertas / juntas) sobre el mismo cuerpo.
-const withLegs = (base: string[], legs: [string, string]) => {
-  const r = base.slice();
-  r[21] = legs[0]; r[22] = legs[1];
-  return r;
+// ── Animación ──
+// Cambia un píxel (fila, columna) de un dibujo.
+const put = (rows: string[], r: number, c: number, ch: string) => {
+  rows[r] = rows[r].slice(0, c) + ch + rows[r].slice(c + 1);
 };
+const setLegs = (rows: string[], legs: [string, string]) => { rows[21] = legs[0]; rows[22] = legs[1]; };
+// Los lazos de las trenzas se mecen: se intercambian las dos filas del lazo.
+const swayRibbons = (rows: string[], r0: number) => { const a = rows[r0]; rows[r0] = rows[r0 + 1].replace(/R/g, '#').replace(/r/g, 'R').replace(/#/g, 'r'); rows[r0 + 1] = a.replace(/R/g, '#').replace(/r/g, 'R').replace(/#/g, 'r'); };
+
 const LEGS_APART: [string, string] = ['..OBB...BBO.', '..OOO...OOO.'];
 const LEGS_MID: [string, string] = ['....OBBBO...', '....OOOOO...'];
 const SIDE_APART: [string, string] = ['...OBB..BBO.', '...OOO..OOO.'];
 const SIDE_MID: [string, string] = ['.....OBBO...', '.....OOOO...'];
 
+// Brazos de frente/espaldas (manos en columnas 3 y 9, filas 14–15):
+// en cada paso un brazo sube y el otro baja.
+const armsFB = (rows: string[], step: number) => {
+  const up = step === 0 ? 3 : 9, down = step === 0 ? 9 : 3;
+  put(rows, 13, up, 'S'); put(rows, 15, up, 'D');
+  put(rows, 14, down, 'D'); put(rows, 16, down, 'S');
+};
+// Brazo de perfil (columna 5, filas 14–15): adelante o atrás.
+const armSide = (rows: string[], step: number) => {
+  put(rows, 14, 5, 'D'); put(rows, 15, 5, 'D');
+  const c = step === 0 ? 7 : 4;
+  put(rows, 14, c, 'S'); put(rows, 15, c, 'S');
+};
+
+// Ciclo de 4 cuadros: paso · pies juntos (rebote) · paso · pies juntos (rebote).
+function walkCycle(base: string[], apart: [string, string], mid: [string, string], arms: (rows: string[], step: number) => void, ribbonRow: number): string[][] {
+  const f0 = base.slice(); setLegs(f0, apart); arms(f0, 0);
+  const f1 = base.slice(); setLegs(f1, mid); swayRibbons(f1, ribbonRow);
+  const f2 = base.slice(); setLegs(f2, apart); arms(f2, 1);
+  const f3 = base.slice(); setLegs(f3, mid); swayRibbons(f3, ribbonRow);
+  return [f0, f1, f2, f3];
+}
+
 const mk = (rows: string[]) => sprite(rows, GRECIA_PAL);
+const idleB = (rows: string[], ribbonRow: number) => { const r = rows.slice(); swayRibbons(r, ribbonRow); return r; };
 
 export interface DirSprites { idle: ReturnType<typeof sprite>[]; walk: ReturnType<typeof sprite>[] }
 export const GRECIA: { back: DirSprites; front: DirSprites; side: DirSprites } = {
-  back: { idle: [mk(GRECIA_A), mk(GRECIA_B)], walk: [mk(withLegs(GRECIA_A, LEGS_APART)), mk(withLegs(GRECIA_A, LEGS_MID))] },
-  front: { idle: [mk(GRECIA_F)], walk: [mk(withLegs(GRECIA_F, LEGS_APART)), mk(withLegs(GRECIA_F, LEGS_MID))] },
-  side: { idle: [mk(GRECIA_S)], walk: [mk(withLegs(GRECIA_S, SIDE_APART)), mk(withLegs(GRECIA_S, SIDE_MID))] },
+  back: { idle: [mk(GRECIA_A), mk(idleB(GRECIA_A, 9))], walk: walkCycle(GRECIA_A, LEGS_APART, LEGS_MID, armsFB, 9).map(mk) },
+  front: { idle: [mk(GRECIA_F), mk(idleB(GRECIA_F, 9))], walk: walkCycle(GRECIA_F, LEGS_APART, LEGS_MID, armsFB, 9).map(mk) },
+  side: { idle: [mk(GRECIA_S), mk(idleB(GRECIA_S, 9))], walk: walkCycle(GRECIA_S, SIDE_APART, SIDE_MID, armSide, 9).map(mk) },
 };
 export const GRECIA_FRAMES = GRECIA.back.idle;
 
