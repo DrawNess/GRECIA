@@ -2,12 +2,12 @@
 // frente y desde abajo; bruma alta en luz; Grecia pequeña en el camino,
 // de espaldas, caminando hacia el árbol. Lo estático se pinta una vez en
 // PixelBuffers; por cuadro solo pétalos, destellos, bokeh, niebla y la chica.
-import { PixelBuffer, hex, type RGBA } from '../engine/pixels';
+import { PixelBuffer, hex, sprite, type RGBA } from '../engine/pixels';
 import { Rng } from '../engine/rng';
 import { VW, VH, SW, SH } from '../engine/stage';
 import { C } from '../art/palette';
 import { GRECIA, SPRIG, type DirSprites } from '../art/sprites';
-import type { Input } from '../engine/input';
+import { ACTION, type Input } from '../engine/input';
 
 const HORIZON = 150;
 const TRUNK = { x: 168, base: HORIZON + 4, top: 98 };
@@ -23,6 +23,11 @@ interface Fog { x: number; y: number; rx: number; ry: number; v: number; a: numb
 interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: string }
 // Flor o pétalo que vuela con el viento al empezar el juego.
 interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
+// Arbusto en el suelo. `baseY` decide si Grecia pasa por delante o por detrás.
+type Secret = 'none' | 'butterflies' | 'birds';
+interface Prop { img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number }
+// Mariposa, pájaro o pétalo que sale de un arbusto.
+interface Critter { kind: 'butterfly' | 'bird' | 'puff'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type Facing = 'up' | 'down' | 'left' | 'right';
 interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
@@ -45,6 +50,10 @@ export class TitleScene {
   private readonly player: Player = { x: GIRL.x, y: GIRL.y, facing: 'up', moving: false, walkT: 0 };
   private mode: 'menu' | 'game' = 'menu';
   private focus = 1; // 1 = ventana de enfoque + niebla del menú · 0 = todo nítido (juego)
+  private readonly props: Prop[] = [];
+  private readonly marker: HTMLCanvasElement;
+  private critters: Critter[] = [];
+  private nearProp: Prop | null = null;
   private gameT = 0;      // segundos desde que empezó el juego
   private frontAlpha = 1; // opacidad del racimo estático del frente
   private flyers: Flyer[] = [];
@@ -71,6 +80,15 @@ export class TitleScene {
     paintCanopy(back, rng, dew);
     const trunk = new PixelBuffer(VW, VH);
     paintTrunk(trunk);
+    for (const [cx, baseY, r] of BUSHES) {
+      const img = renderBush(rng, r);
+      const v = rng.next();
+      this.props.push({
+        img: img.toCanvas(), x: cx - (img.w >> 1), y: baseY - img.h + 3, cx, baseY, r,
+        secret: v < 0.42 ? 'none' : v < 0.74 ? 'butterflies' : 'birds', used: false, shake: 0,
+      });
+    }
+    this.marker = sprite(MARKER_ROWS, { O: C.lilacDark, W: C.white, Z: C.lilacDeep }).toCanvas();
 
     const front = new PixelBuffer(VW, VH);
     paintForeground(front, rng, dew);
@@ -80,7 +98,9 @@ export class TitleScene {
     // La versión borrosa se calcula sobre la imagen completa.
     const full = new PixelBuffer(VW, VH);
     full.blit(back, 0, 0);
+    for (const pr of this.props) if (pr.baseY <= TRUNK.base + 1) full.blit(PixelBuffer_from(pr.img), pr.x, pr.y);
     full.blit(trunk, 0, 0);
+    for (const pr of this.props) if (pr.baseY > TRUNK.base + 1) full.blit(PixelBuffer_from(pr.img), pr.x, pr.y);
     full.blit(front, 0, 0);
     this.softStatic = makeSoft(full.toCanvas());
     this.backFull = back.toCanvas();
@@ -195,13 +215,76 @@ export class TitleScene {
     else if (!blocked(p.x, ny)) p.y = ny;
   }
 
+  private findNearProp(): Prop | null {
+    const fx = this.player.x + GIRL_W / 2, fy = this.player.y + GIRL_H - 1;
+    let best: Prop | null = null, bestD = Infinity;
+    for (const pr of this.props) {
+      const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
+      if (dx > pr.r + 9 || dy > 12) continue;
+      const d = dx + dy * 2;
+      if (d < bestD) { bestD = d; best = pr; }
+    }
+    return best;
+  }
+
+  // Z sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
+  private poke(pr: Prop): void {
+    pr.shake = 0.5;
+    const r = this.rng;
+    const top = pr.baseY - pr.r * 2;
+    for (let i = 0; i < 4; i++) {
+      this.critters.push({ kind: 'puff', x: pr.cx + r.range(-pr.r, pr.r), y: top + r.range(0, pr.r), vx: r.range(-22, 22), vy: r.range(-40, -15), ph: 0, t: 0, life: 1.2, col: r.pick(PETAL_COLS) });
+    }
+    if (pr.used || pr.secret === 'none') return;
+    pr.used = true;
+    const away = this.player.x + GIRL_W / 2 < pr.cx ? 1 : -1;
+    if (pr.secret === 'butterflies') {
+      const n = 4 + r.int(4);
+      for (let i = 0; i < n; i++) {
+        this.critters.push({ kind: 'butterfly', x: pr.cx + r.range(-pr.r * 0.6, pr.r * 0.6), y: top + r.range(0, pr.r * 0.8), vx: r.range(-14, 14) + away * 6, vy: r.range(-22, -8), ph: r.range(0, 6.28), t: -r.range(0, 0.5), life: r.range(5, 8), col: r.pick([C.butterfly, C.butterfly2, '#f7d6e6', C.lilacLight]) });
+      }
+    } else {
+      const n = 3 + r.int(3);
+      for (let i = 0; i < n; i++) {
+        this.critters.push({ kind: 'bird', x: pr.cx + r.range(-pr.r * 0.5, pr.r * 0.5), y: top + r.range(0, pr.r * 0.6), vx: away * r.range(45, 85) + r.range(-10, 10), vy: -r.range(70, 110), ph: r.range(0, 6.28), t: -r.range(0, 0.35), life: 6, col: r.pick(['#6e5c57', '#5a4c48', '#7d6a62']) });
+      }
+    }
+  }
+
+  private updateCritters(dt: number): void {
+    for (let i = this.critters.length - 1; i >= 0; i--) {
+      const c = this.critters[i];
+      c.t += dt;
+      if (c.t < 0) continue; // sale con un pequeño retraso
+      if (c.kind === 'puff') {
+        c.vy += 70 * dt;
+        c.x += c.vx * dt; c.y += c.vy * dt;
+      } else if (c.kind === 'butterfly') {
+        c.vy += (-14 - c.vy) * 0.4 * dt; // termina subiendo despacio
+        c.x += (c.vx + Math.sin(c.t * 4.2 + c.ph) * 22) * dt;
+        c.y += (c.vy + Math.cos(c.t * 2.6 + c.ph) * 14) * dt;
+      } else {
+        c.vy += (-28 - c.vy) * 0.9 * dt; // arranque fuerte, luego planea
+        c.x += c.vx * dt;
+        c.y += (c.vy + Math.sin(c.t * 6 + c.ph) * 6) * dt;
+      }
+      if (c.t > c.life || c.y < -12 || c.x < -12 || c.x > VW + 12) this.critters.splice(i, 1);
+    }
+  }
+
   update(dt: number, input?: Input): void {
     this.t += dt;
     if (this.mode === 'game') {
       this.gameT += dt;
       if (this.focus > 0) this.focus = Math.max(0, this.focus - dt / 1.8);
       this.frontAlpha = Math.max(0, Math.min(1, 1 - (this.gameT - 0.55) / 0.9));
-      if (input) this.movePlayer(dt, input);
+      if (input) {
+        this.movePlayer(dt, input);
+        this.nearProp = this.findNearProp();
+        if (input.take(ACTION) && this.nearProp) this.poke(this.nearProp);
+      }
+      for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
+      this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
         const f = this.flyers[i];
         const age = this.gameT - f.delay;
@@ -257,17 +340,57 @@ export class TitleScene {
       crisp.globalAlpha = 1;
     }
 
+    // Todo lo que pisa el suelo se dibuja de atrás hacia adelante según su base.
     const p = this.player;
     const gx = Math.round(p.x), gy = Math.round(p.y);
     const img = this.girlFrame();
-    const behindTrunk = p.y + GIRL_H - 1 < TRUNK.base + 1;
-    const drawGirl = () => {
-      crisp.drawImage(this.girlShadow, gx, gy + GIRL_H - 2);
-      crisp.drawImage(img, gx, gy);
-    };
-    if (behindTrunk) drawGirl();
-    crisp.drawImage(this.trunk, 0, 0);
-    if (!behindTrunk) drawGirl();
+    type Drawable = { baseY: number; draw: () => void };
+    const items: Drawable[] = [
+      { baseY: TRUNK.base + 1, draw: () => crisp.drawImage(this.trunk, 0, 0) },
+      { baseY: p.y + GIRL_H - 1, draw: () => { crisp.drawImage(this.girlShadow, gx, gy + GIRL_H - 2); crisp.drawImage(img, gx, gy); } },
+    ];
+    for (const pr of this.props) {
+      // En el menú los arbustos fuera de la ventana de enfoque se funden con el fondo borroso.
+      const alpha = this.focus > 0 ? 1 - this.focus * (1 - focusAt(pr.cx, pr.baseY)) : 1;
+      const sx = pr.shake > 0 ? Math.round(Math.sin(pr.shake * 40) * 1.5) : 0;
+      items.push({ baseY: pr.baseY, draw: () => {
+        if (alpha <= 0) return;
+        crisp.globalAlpha = alpha;
+        crisp.drawImage(pr.img, pr.x + sx, pr.y);
+        crisp.globalAlpha = 1;
+      } });
+    }
+    items.sort((a, b) => a.baseY - b.baseY);
+    for (const it of items) it.draw();
+
+    if (this.nearProp && this.mode === 'game') {
+      const m = this.nearProp;
+      crisp.drawImage(this.marker, m.cx - 4, m.baseY - m.r * 2 - 14 + Math.round(Math.sin(this.t * 4) * 1.2));
+    }
+    for (const c of this.critters) {
+      if (c.t < 0) continue;
+      const x = Math.round(c.x), y = Math.round(c.y);
+      crisp.fillStyle = c.col;
+      if (c.kind === 'puff') {
+        crisp.globalAlpha = Math.max(0, 1 - c.t / c.life);
+        crisp.fillRect(x, y, 2, 2);
+        crisp.globalAlpha = 1;
+      } else if (c.kind === 'butterfly') {
+        if (c.t > c.life - 1) crisp.globalAlpha = c.life - c.t;
+        if (Math.sin(c.t * 9 + c.ph) > 0) { crisp.fillRect(x - 1, y, 3, 1); crisp.fillRect(x - 1, y - 1, 1, 1); crisp.fillRect(x + 1, y - 1, 1, 1); }
+        else crisp.fillRect(x, y - 1, 1, 2);
+        crisp.globalAlpha = 1;
+      } else {
+        // Pájaro: cuerpo y alas que baten.
+        const up = Math.sin(c.t * 11 + c.ph) > 0;
+        crisp.fillRect(x - 1, y, 3, 1);
+        crisp.fillStyle = '#e9dfd6';
+        crisp.fillRect(x, y, 1, 1);
+        crisp.fillStyle = c.col;
+        crisp.fillRect(x - 2, up ? y - 1 : y + 1, 1, 1); crisp.fillRect(x + 2, up ? y - 1 : y + 1, 1, 1);
+        crisp.fillRect(x + (c.vx > 0 ? 2 : -2), y, 1, 1);
+      }
+    }
 
     for (const p of this.petals) {
       const x = Math.round(p.x), y = Math.round(p.y);
@@ -570,6 +693,62 @@ function paintCanopy(pb: PixelBuffer, rng: Rng, dew: Pt[]): void {
   for (const [x, y, tilt] of near) {
     panicle(pb, rng, x, y, rng.range(36, 48), rng.range(24, 32), tilt, 2, 0.06, 70, dew);
   }
+}
+
+// ───────────────────────── arbustos e interacción ─────────────────────────
+
+// [centro x, base y, radio]. Evitan el camino y la base del tronco.
+const BUSHES: [number, number, number][] = [
+  [16, 176, 11], [52, 163, 9], [86, 173, 10], [30, 156, 7], [122, 156, 7],
+  [196, 175, 11], [232, 161, 9], [268, 177, 12], [300, 159, 8], [250, 153, 7], [178, 178, 8],
+];
+
+// Burbuja con la Z que aparece sobre el arbusto cercano.
+const MARKER_ROWS = [
+  '.OOOOOOO.',
+  'OWWWWWWWO',
+  'OWZZZZZWO',
+  'OWWWWZWWO',
+  'OWWWZWWWO',
+  'OWWZWWWWO',
+  'OWZZZZZWO',
+  'OWWWWWWWO',
+  '.OOOOOOO.',
+  '....O....',
+];
+
+// Arbusto de lila: follaje redondo con dos a cuatro racimos pequeños encima.
+function renderBush(rng: Rng, r: number): PixelBuffer {
+  const w = r * 2 + 12, h = r * 2 + 10;
+  const pb = new PixelBuffer(w, h);
+  const cx = w >> 1, cy = h - 5 - r;
+  pb.ellipse(cx, h - 3, r + 2, 2, hex(C.shadow, 60));
+  pb.circle(cx + 1, cy + 2, r, hex(C.leafDark));
+  pb.circle(cx, cy, r - 1, hex(C.leaf));
+  pb.circle(cx - Math.round(r * 0.35), cy - Math.round(r * 0.35), Math.max(1, Math.round(r * 0.4)), hex(C.leafLight));
+  for (let i = 0; i < r * 2; i++) {
+    const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * (r - 1);
+    pb.set(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), hex(rng.pick([C.leafDark, C.leafLight])));
+  }
+  const n = 2 + rng.int(3);
+  for (let i = 0; i < n; i++) {
+    const px = cx + Math.round(rng.range(-r * 0.6, r * 0.6)), py = cy + Math.round(rng.range(-r * 0.1, r * 0.4));
+    panicle(pb, rng, px, py, Math.round(r * 0.9) + 3, Math.round(r * 0.6) + 3, rng.range(-0.5, 0.5), r >= 10 ? 2 : 1, 0.04, Math.round(r * 2.2));
+  }
+  return pb;
+}
+
+// Valor de la máscara de enfoque en un punto (1 nítido … 0 borroso).
+function focusAt(x: number, y: number): number {
+  const dx = (x - FOCUS.x) / FOCUS.aspect, dy = y - FOCUS.y;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  return Math.max(0, Math.min(1, (FOCUS.outer - d) / (FOCUS.outer - FOCUS.inner)));
+}
+
+function PixelBuffer_from(c: HTMLCanvasElement): PixelBuffer {
+  const pb = new PixelBuffer(c.width, c.height);
+  pb.data.set(c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data);
+  return pb;
 }
 
 // ───────────────────────── primer plano: la foto ─────────────────────────

@@ -33,10 +33,14 @@ link.rel = 'icon';
 link.href = fav.toDataURL();
 document.head.appendChild(link);
 
-startLoop(
-  (dt) => { scene.update(dt, input); input.endFrame(); },
-  () => scene.render(stage.crisp, stage.soft, stage.haze),
-);
+const step = (dt: number) => { scene.update(dt, input); input.endFrame(); };
+const draw = () => scene.render(stage.crisp, stage.soft, stage.haze);
+startLoop(step, draw);
+
+// Gancho de depuración solo en local: permite avanzar la simulación a mano.
+if (import.meta.env.DEV || location.hostname === 'localhost') {
+  (window as unknown as { __grecia: unknown }).__grecia = { scene, stage, input, tick: (dt: number) => { step(dt); draw(); } };
+}
 
 function enterGame(showHint: boolean): void {
   scene.startGame();
