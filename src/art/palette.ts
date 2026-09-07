@@ -48,13 +48,12 @@ export const C = {
   ribbon: '#b98bdc',
   ribbonDark: '#8c62b0',
   shoe: '#5b4148',
-  // él
-  himHair: '#2f2630',
-  himJacket: '#3b4a6b',
-  himJacketShade: '#2e3a55',
-  himShirt: '#ece6da',
-  himPants: '#6b6270',
-  himShoe: '#3b3236',
+  // Jhammil
+  jhHair: '#2f2630',
+  jhShirt: '#f6f3ec',
+  jhShirtShade: '#d6d0c6',
+  jhPants: '#4f5566',
+  jhShoe: '#3b3236',
   // la esquina verde
   wall: '#4f8a6a',
   wallLight: '#6aa583',

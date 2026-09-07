@@ -168,28 +168,29 @@ const GRECIA_SIT = [
 ];
 export const GRECIA_SEATED = mk(GRECIA_SIT);
 
-// Él, sentado mirando a la izquierda (hacia ella). Un poco más alto que Grecia.
-const HIM_PAL = {
-  O: C.outline, k: C.himHair, S: C.skin, s: C.skinShade,
-  J: C.himJacket, j: C.himJacketShade, W: C.himShirt, P: C.himPants, B: C.himShoe,
+// Jhammil, sentado mirando a la izquierda (hacia ella): cabello corto, camisa
+// blanca. Un poco más alto que Grecia.
+const JHAMMIL_PAL = {
+  O: C.outline, k: C.jhHair, S: C.skin, s: C.skinShade,
+  W: C.jhShirt, w: C.jhShirtShade, P: C.jhPants, B: C.jhShoe,
 };
-const HIM_SIT = [
+const JHAMMIL_SIT = [
   '....OOOO....',
   '...OkkkkO...',
   '..OkkkkkkO..',
-  '..OSSkkkkO..',
   '..OSSSkkkO..',
-  '..OSOSkkkO..',
-  '..OSSSkkkO..',
-  '..OsSSkkkO..',
+  '..OSSSSkkO..',
+  '..OSOSSkkO..',
+  '..OSSSSkkO..',
+  '..OsSSSSsO..',
   '...OSSOO....',
-  '..OJJJJJJO..',
-  '.OJJJWJJJJO.',
-  '.OJJJWJJJJO.',
-  '.OJjJWJJjJO.',
-  '.OJjJJJJjJO.',
-  '.OSjJJJJjJO.',
-  '.OPPPPjJJJO.',
+  '..OWWWWWWO..',
+  '.OWWWwWWWWO.',
+  '.OWWWwWWWWO.',
+  '.OWwWwWWwWO.',
+  '.OWwWWWWwWO.',
+  '.OSwWWWWwWO.',
+  '.OPPPPwWWWO.',
   'OPPPPPPPPPO.',
   'OPPOOOOOOO..',
   'OPPO........',
@@ -201,7 +202,7 @@ const HIM_SIT = [
   'OBBBO.......',
   'OOOOO.......',
 ];
-export const HIM_SEATED = sprite(HIM_SIT, HIM_PAL);
+export const JHAMMIL_SEATED = sprite(JHAMMIL_SIT, JHAMMIL_PAL);
 
 // Ramita de lila (ícono del menú y favicon).
 export const SPRIG = sprite(

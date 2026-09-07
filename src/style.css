@@ -172,6 +172,20 @@ body {
   70% { transform: translateX(calc(-1 * var(--u))); }
 }
 
+/* ── Etiqueta de nombre sobre un personaje ── */
+.tag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font-size: calc(5.5 * var(--u));
+  line-height: 1;
+  padding: calc(1.5 * var(--u)) calc(3 * var(--u));
+  color: var(--lilac-4);
+  background: rgba(255, 255, 255, 0.85);
+  border: var(--u) solid var(--lilac-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* ── Texto al desbloquear ── */
 .caption {
   position: absolute;

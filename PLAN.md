@@ -47,8 +47,9 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   casa** (puerta con luz en el portal, ventana encendida, cámara de seguridad
   con luz roja que parpadea); a la derecha, la calle que entra con un poste
   de luz al centro.
-- Tramo 4 (noche): tercer árbol, farol y **la banca grande con él sentado**
-  (un poco más alto que ella). Con J junto a la banca, Grecia se sienta a su
+- Tramo 4 (noche): tercer árbol, farol y **la banca grande con Jhammil**
+  sentado (cabello corto, camisa blanca, un poco más alto que ella); su nombre
+  aparece en una etiqueta al acercarse. Con J junto a la banca, Grecia se sienta a su
   lado y quedan mirándose; cualquier flecha la levanta.
 - Puerta de jardín cerrada al final (meta, placeholder).
 - Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.

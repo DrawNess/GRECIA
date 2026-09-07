@@ -6,7 +6,8 @@ import { PixelBuffer, hex, sprite, type RGBA } from '../engine/pixels';
 import { Rng } from '../engine/rng';
 import { VW, VH, SW, SH } from '../engine/stage';
 import { C } from '../art/palette';
-import { GRECIA, GRECIA_SEATED, HIM_SEATED, SPRIG, type DirSprites } from '../art/sprites';
+import { GRECIA, GRECIA_SEATED, JHAMMIL_SEATED, SPRIG, type DirSprites } from '../art/sprites';
+import { story } from '../content/story';
 import { ACTION, type Input } from '../engine/input';
 
 export const WORLD_W = 1440;
@@ -152,8 +153,8 @@ export class TitleScene {
     this.lights.push({ x: STREET.pole + 5, y: 120, r: 7, col: '255,225,160', a: 0.45 });
     this.lights.push({ x: STREET.house + 10, y: HORIZON - 23, r: 5, col: '255,225,160', a: 0.32 });
     this.lights.push({ x: STREET.house + 27, y: HORIZON - 15, r: 6, col: '255,220,150', a: 0.3 });
-    // La banca grande, con él sentado mirando hacia donde llegará ella.
-    this.addProp('bench', renderBench(HIM_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
+    // La banca grande, con Jhammil sentado mirando hacia donde llegará ella.
+    this.addProp('bench', renderBench(JHAMMIL_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
     this.addProp('gate', renderGate(rng), 1412, 160, 16, { hw: 15, depth: 4 });
     this.seated = GRECIA_SEATED.toCanvas();
     for (const [cx, baseY, r] of bushSpots(rng, this.props)) {
@@ -224,6 +225,12 @@ export class TitleScene {
     const pr = this.addProp('trunk', crop.pb.toCanvas(), x, base, hw, { hw, depth: 4 });
     pr.x = crop.x; pr.y = crop.y;
     void rng;
+  }
+
+  /** Etiqueta con el nombre de Jhammil (coordenadas de pantalla) cuando ella está cerca de la banca. */
+  nameTag(): { text: string; x: number; y: number } | null {
+    if (this.mode !== 'game' || !(this.player.sitting || this.nearProp?.kind === 'bench')) return null;
+    return { text: story.himName, x: BENCH.x + 9 - Math.round(this.camX), y: BENCH.baseY - 29 };
   }
 
   /** Tras el menú: se despeja la escena y Grecia pasa a controlarse con el teclado. */
@@ -321,7 +328,7 @@ export class TitleScene {
     return best;
   }
 
-  // J junto a la banca: Grecia se sienta a su lado y se miran.
+  // J junto a la banca: Grecia se sienta al lado de Jhammil y se miran.
   private sit(): void {
     const p = this.player;
     p.sitting = true; p.moving = false; p.walkT = 0; p.facing = 'right';
@@ -1010,7 +1017,7 @@ function renderLamp(lit: number): HTMLCanvasElement {
   return pb.toCanvas();
 }
 
-// Banca grande de madera, con él sentado en el lado derecho, mirando a la izquierda.
+// Banca grande de madera, con Jhammil sentado en el lado derecho, mirando a la izquierda.
 function renderBench(him: PixelBuffer): HTMLCanvasElement {
   const pb = new PixelBuffer(48, 33);
   pb.ellipse(24, 31, 23, 1, hex(C.shadow, 60));

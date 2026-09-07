@@ -33,8 +33,23 @@ link.rel = 'icon';
 link.href = fav.toDataURL();
 document.head.appendChild(link);
 
+// Etiqueta con nombre que sigue a un punto de la escena.
+const tagEl = document.createElement('div');
+tagEl.className = 'tag';
+tagEl.hidden = true;
+stage.ui.appendChild(tagEl);
+
 const step = (dt: number) => { scene.update(dt, input); input.endFrame(); };
-const draw = () => scene.render(stage.crisp, stage.soft, stage.haze);
+const draw = () => {
+  scene.render(stage.crisp, stage.soft, stage.haze);
+  const tag = scene.nameTag();
+  if (tag) {
+    tagEl.textContent = tag.text;
+    tagEl.style.left = `calc(${tag.x} * var(--u))`;
+    tagEl.style.top = `calc(${tag.y} * var(--u))`;
+  }
+  tagEl.hidden = !tag;
+};
 startLoop(step, draw);
 
 // Gancho de depuración solo en local: permite avanzar la simulación a mano.
