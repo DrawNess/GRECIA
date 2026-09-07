@@ -208,3 +208,29 @@ Notas:
    ```
 3. Abrir este documento y `PLAN.md`. Si se usa Claude Code, pedirle que lea
    `docs/CONTEXTO.md` primero: ahí está todo lo que no se deduce del código.
+
+## 9. Traspaso (2026-09-07, fin de la primera sesión)
+
+Estado al cerrar: todo commiteado en `main` y subido a `DrawNess/GRECIA`.
+Verificado en Chrome: menú → nombre → viento → paseo completo (día → noche →
+esquina verde → banca con Jhammil → Chimuelo) → puerta final. Sin errores en
+consola.
+
+Primero, en casa:
+
+1. `git clone git@github.com:DrawNess/GRECIA.git && cd GRECIA && pnpm install && pnpm dev`.
+2. Publicar: hacer el repo **público** (Settings → Danger Zone), luego
+   Settings → Pages → Source: **GitHub Actions**, y re-correr el workflow
+   (Actions → Re-run) o hacer un push. URL: `https://drawness.github.io/GRECIA/`.
+3. Si se trabaja con Claude Code, empezar con: *"Lee docs/CONTEXTO.md y
+   PLAN.md. Seguimos con la caja de diálogo."* Claude de esta máquina tenía
+   además notas de memoria locales; todo lo importante está en este archivo.
+
+Lo que decidimos que viene (en orden): caja de diálogo con máquina de
+escribir (J frente a su casa, al sentarse en la banca, quizá con Chimuelo)
+→ textos reales de Jhammil → fecha de la segunda validación → carta final
+cifrada + QR → música opcional → pruebas en la PC de ella.
+
+Ideas que quedaron dichas y no hechas: afinar la cara de Chimuelo si se
+quiere más parecido; "fragmentos" coleccionables que abran la puerta final;
+tarjeta "ábrelo en la compu" cuando se abre desde el celular.

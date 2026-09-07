@@ -77,6 +77,11 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   la izquierda por delante de la cámara) y Grecia queda bajo control en el
   mismo escenario (flechas / WASD).
 
+## Traspaso
+
+Contexto completo para continuar en otra máquina: `docs/CONTEXTO.md`
+(sección 9 = qué hacer primero).
+
 ## Publicar (una sola vez)
 
 1. Crear repo público `grecia` en GitHub (vacío, sin README).
