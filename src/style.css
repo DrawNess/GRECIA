@@ -1,0 +1,194 @@
+:root {
+  --lilac-1: #e9dcf5;
+  --lilac-2: #c9a9e6;
+  --lilac-3: #9d74c7;
+  --lilac-4: #6a4a8c;
+  --cream: #fbf7f1;
+  --ink: #3b2a33;
+  --muted: #8b7f93;
+  --rose: #b0578f;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #1e1a22;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'DotGothic16', 'Courier New', monospace;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* El escenario: 320×180 píxeles virtuales, escalado entero desde JS.
+   --s = escala; --u = un píxel virtual en píxeles CSS. */
+#stage {
+  position: absolute;
+  --s: 1;
+  --u: calc(var(--s) * 1px);
+}
+
+#stage canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#soft { image-rendering: auto; }
+
+#crisp {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#veil {
+  position: absolute;
+  inset: 0;
+  background: var(--cream);
+  opacity: 1;
+  transition: opacity 1.8s ease;
+  pointer-events: none;
+}
+#veil.is-gone { opacity: 0; }
+
+/* ── Panel del menú ── */
+.panel {
+  pointer-events: auto;
+  position: absolute;
+  right: calc(10 * var(--u));
+  top: calc(16 * var(--u));
+  width: calc(118 * var(--u));
+  box-sizing: border-box;
+  padding: calc(10 * var(--u)) calc(11 * var(--u)) calc(11 * var(--u));
+  background: rgba(252, 248, 243, 0.9);
+  border: var(--u) solid var(--lilac-2);
+  outline: var(--u) solid rgba(255, 255, 255, 0.85);
+  outline-offset: calc(-3 * var(--u));
+  box-shadow: calc(2 * var(--u)) calc(3 * var(--u)) 0 rgba(59, 42, 51, 0.14);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+.panel.is-gone {
+  opacity: 0;
+  transform: translateY(calc(-4 * var(--u)));
+}
+
+.panel__head { display: flex; flex-direction: column; }
+
+.sprig {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  image-rendering: pixelated;
+  margin-bottom: calc(3 * var(--u));
+}
+
+.title {
+  font-family: 'Pixelify Sans', 'DotGothic16', monospace;
+  font-weight: 500;
+  font-size: calc(15 * var(--u));
+  line-height: 1;
+  letter-spacing: calc(0.5 * var(--u));
+  color: var(--lilac-4);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: calc(6 * var(--u));
+  color: var(--muted);
+  margin: calc(2 * var(--u)) 0 0;
+}
+
+.rule {
+  height: var(--u);
+  background: var(--lilac-1);
+  margin: calc(7 * var(--u)) 0 calc(8 * var(--u));
+}
+
+/* ── Pasos (formularios) ── */
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  margin: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.step.is-hidden { display: none; }
+.step.is-leaving { opacity: 0; transform: translateY(calc(-3 * var(--u))); }
+.step.is-entering { opacity: 0; transform: translateY(calc(3 * var(--u))); }
+
+.step label {
+  font-size: calc(6.5 * var(--u));
+  line-height: 1.3;
+}
+
+.step input {
+  font: inherit;
+  font-size: calc(6.5 * var(--u));
+  letter-spacing: calc(0.5 * var(--u));
+  width: 100%;
+  box-sizing: border-box;
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border: var(--u) solid var(--lilac-2);
+  border-radius: 0;
+  background: #fff;
+  color: var(--ink);
+  outline: none;
+  caret-color: var(--lilac-3);
+}
+.step input:focus {
+  border-color: var(--lilac-3);
+  box-shadow: 0 0 0 var(--u) var(--lilac-1);
+}
+.step input::placeholder { color: #bdb2c8; }
+
+.msg {
+  margin: 0;
+  min-height: calc(7 * var(--u));
+  font-size: calc(5.5 * var(--u));
+  line-height: 1.3;
+  color: var(--rose);
+}
+
+.hint {
+  margin: 0;
+  font-size: calc(5 * var(--u));
+  color: var(--muted);
+}
+
+.step.is-shaking { animation: shake 0.32s ease; }
+@keyframes shake {
+  20% { transform: translateX(calc(-2 * var(--u))); }
+  45% { transform: translateX(calc(2 * var(--u))); }
+  70% { transform: translateX(calc(-1 * var(--u))); }
+}
+
+/* ── Texto al desbloquear ── */
+.caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(14 * var(--u));
+  margin: 0;
+  text-align: center;
+  font-size: calc(7 * var(--u));
+  color: #fff;
+  text-shadow: 0 var(--u) 0 rgba(59, 42, 51, 0.55);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.caption.is-shown { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .step.is-shaking { animation: none; }
+  #veil { transition-duration: 0.3s; }
+}
