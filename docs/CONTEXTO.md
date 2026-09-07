@@ -174,9 +174,14 @@ Una sola vez:
    git push -u origin main
    ```
 3. En el repo: **Settings → Pages → Build and deployment → Source: GitHub
-   Actions**.
+   Actions**. (El workflow intenta habilitarlo solo con
+   `actions/configure-pages`, pero si el primer despliegue falla con
+   "Creating Pages deployment failed … Not Found", es esto: habilitarlo a
+   mano y volver a correr el workflow desde la pestaña Actions.)
 4. En ~1 minuto queda publicado en `https://TU_USUARIO.github.io/grecia/`.
    El progreso del workflow se ve en la pestaña **Actions**.
+
+Repo real: `DrawNess/GRECIA` → `https://drawness.github.io/GRECIA/`.
 
 Notas:
 - El repo es público (Pages gratis lo exige). Por eso el nombre de ella no
