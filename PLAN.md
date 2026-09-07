@@ -26,7 +26,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 | # | Etapa | Estado |
 |---|-------|--------|
 | 0 | Setup: repo, Vite/TS, Action → Pages, menú con validación de nombre | ✅ código listo · ⏳ falta crear el repo en GitHub y hacer push |
-| 1 | Núcleo del motor: loop, input, sprites animados, tilemap/colisiones, cámara | pendiente |
+| 1 | Núcleo del motor: loop, input, sprites animados, tilemap/colisiones, cámara | 🔨 en curso: input, sprites 3 direcciones con caminata, movimiento en franja de suelo, orden con el tronco. Falta: cámara/scroll, más escenarios |
 | 2 | Capa de ensueño en el juego: parallax, DOF, partículas, transiciones, caja de diálogo | pendiente |
 | 3 | Interacción y guardado: objetos con `Z`, diálogos, fragmentos, flags | pendiente |
 | 4 | Puerta + QR: 2ª validación (fecha), token en URL, carta cifrada, tarjeta "ábrelo en la compu", QR | pendiente (falta la fecha) |
@@ -47,6 +47,8 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   mayúsculas.
 - Segunda validación (fecha `DD/MM/AAAA`): lista en código; se activa al
   poner `dateHash` (generar con `pnpm hash "DD/MM/AAAA"`).
+- Al validar, el panel desaparece, la neblina y el desenfoque se despejan y
+  Grecia queda bajo control en el mismo escenario (flechas / WASD).
 
 ## Publicar (una sola vez)
 

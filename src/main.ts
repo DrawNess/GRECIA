@@ -5,6 +5,7 @@ import '@fontsource/pixelify-sans/latin-ext-500.css';
 import './style.css';
 
 import { Stage } from './engine/stage';
+import { Input } from './engine/input';
 import { startLoop } from './engine/loop';
 import { loadSave, writeSave, resetSave } from './engine/save';
 import { TitleScene } from './scenes/title';
@@ -19,6 +20,7 @@ if (location.hash === '#reset') {
 
 const stage = new Stage();
 const scene = new TitleScene();
+const input = new Input();
 
 // Favicon: la ramita de lila escalada sin suavizado.
 const fav = document.createElement('canvas');
@@ -32,16 +34,21 @@ link.href = fav.toDataURL();
 document.head.appendChild(link);
 
 startLoop(
-  (dt) => scene.update(dt),
+  (dt) => { scene.update(dt, input); input.endFrame(); },
   () => scene.render(stage.crisp, stage.soft, stage.haze),
 );
 
+function enterGame(showHint: boolean): void {
+  scene.startGame();
+  if (showHint) showCaption(stage.ui, gate.moveHint, 5000);
+}
+
 if (loadSave().unlocked) {
-  showCaption(stage.ui, gate.toBeContinued);
+  enterGame(true);
 } else {
   mountGate(stage.ui, fav.toDataURL(), () => {
     writeSave({ unlocked: true });
-    showCaption(stage.ui, gate.toBeContinued);
+    enterGame(true);
   });
 }
 

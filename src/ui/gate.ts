@@ -100,10 +100,14 @@ export function mountGate(root: HTMLElement, iconUrl: string, onUnlocked: () => 
   }
 }
 
-export function showCaption(root: HTMLElement, text: string): void {
+export function showCaption(root: HTMLElement, text: string, ms?: number): void {
   const p = document.createElement('p');
   p.className = 'caption';
   p.textContent = text;
   root.appendChild(p);
-  requestAnimationFrame(() => requestAnimationFrame(() => p.classList.add('is-shown')));
+  setTimeout(() => p.classList.add('is-shown'), 400);
+  if (ms) {
+    setTimeout(() => p.classList.remove('is-shown'), ms);
+    setTimeout(() => p.remove(), ms + 1500);
+  }
 }

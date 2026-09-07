@@ -66,7 +66,7 @@ body {
 .panel {
   pointer-events: auto;
   position: absolute;
-  right: calc(10 * var(--u));
+  left: calc(10 * var(--u));
   top: calc(16 * var(--u));
   width: calc(118 * var(--u));
   box-sizing: border-box;
@@ -181,8 +181,8 @@ body {
   margin: 0;
   text-align: center;
   font-size: calc(7 * var(--u));
-  color: #fff;
-  text-shadow: 0 var(--u) 0 rgba(59, 42, 51, 0.55);
+  color: var(--lilac-4);
+  text-shadow: 0 var(--u) 0 rgba(255, 255, 255, 0.9), 0 0 calc(3 * var(--u)) rgba(255, 255, 255, 0.9);
   opacity: 0;
   transition: opacity 1.2s ease;
 }
