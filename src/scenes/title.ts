@@ -21,6 +21,8 @@ interface Bokeh { x: number; y: number; r: number; vy: number; ph: number; col: 
 interface Sparkle { x: number; y: number; w: number; ph: number }
 interface Fog { x: number; y: number; rx: number; ry: number; v: number; a: number }
 interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: string }
+// Flor o pétalo que vuela con el viento al empezar el juego.
+interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
 type Facing = 'up' | 'down' | 'left' | 'right';
 interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
@@ -43,6 +45,9 @@ export class TitleScene {
   private readonly player: Player = { x: GIRL.x, y: GIRL.y, facing: 'up', moving: false, walkT: 0 };
   private mode: 'menu' | 'game' = 'menu';
   private focus = 1; // 1 = ventana de enfoque + niebla del menú · 0 = todo nítido (juego)
+  private gameT = 0;      // segundos desde que empezó el juego
+  private frontAlpha = 1; // opacidad del racimo estático del frente
+  private flyers: Flyer[] = [];
   private readonly petals: Petal[] = [];
   private readonly bokeh: Bokeh[] = [];
   private readonly sparkles: Sparkle[] = [];
@@ -129,7 +134,39 @@ export class TitleScene {
 
   /** Tras el menú: se despeja la escena y Grecia pasa a controlarse con el teclado. */
   startGame(): void {
+    if (this.mode === 'game') return;
     this.mode = 'game';
+    this.spawnFlyers();
+  }
+
+  // El racimo del frente se deshace en flores y pétalos que el viento lleva
+  // hacia la izquierda, por delante de nosotros. Las más cercanas van borrosas.
+  private spawnFlyers(): void {
+    const rng = new Rng(4242);
+    const florets = [5, 6, 7, 8, 10, 12, 14].flatMap((S) => [0.2, 0.9].map((rot) => renderFloret(rng, S, rot)));
+    const petals = PETAL_COLS.flatMap((c) => [renderPetal(c, 0), renderPetal(c, 1)]);
+    const weights = FG_MASS.map(([, , r]) => r * r);
+    const totalW = weights.reduce((a, b) => a + b, 0);
+    const pickMass = () => {
+      let u = rng.next() * totalW;
+      for (let i = 0; i < FG_MASS.length; i++) { u -= weights[i]; if (u <= 0) return FG_MASS[i]; }
+      return FG_MASS[FG_MASS.length - 1];
+    };
+    const spawn = (img: HTMLCanvasElement, near: boolean, speed: number) => {
+      const [mx, my, r] = pickMass();
+      const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * r;
+      const x = mx + Math.cos(a) * d, y = my + Math.sin(a) * d;
+      this.flyers.push({
+        x, y, img, near,
+        vx: -(speed + rng.range(0, 90)), vy: -rng.range(10, 55),
+        // Se desprenden primero las del borde izquierdo, luego el resto.
+        delay: 0.4 + rng.range(0, 0.9) + Math.max(0, (x - 200) / 120) * 0.6,
+        ph: rng.range(0, 6.28),
+      });
+    };
+    for (let i = 0; i < 64; i++) spawn(rng.pick(florets), false, 80);
+    for (let i = 0; i < 12; i++) spawn(florets[florets.length - 1 - rng.int(4)], true, 140);
+    for (let i = 0; i < 110; i++) spawn(rng.pick(petals), false, 60);
   }
 
   private girlFrame(): HTMLCanvasElement {
@@ -161,8 +198,19 @@ export class TitleScene {
   update(dt: number, input?: Input): void {
     this.t += dt;
     if (this.mode === 'game') {
+      this.gameT += dt;
       if (this.focus > 0) this.focus = Math.max(0, this.focus - dt / 1.8);
+      this.frontAlpha = Math.max(0, Math.min(1, 1 - (this.gameT - 0.55) / 0.9));
       if (input) this.movePlayer(dt, input);
+      for (let i = this.flyers.length - 1; i >= 0; i--) {
+        const f = this.flyers[i];
+        const age = this.gameT - f.delay;
+        if (age <= 0) continue;
+        const k = Math.min(1, age / 0.6); // arranque suave
+        f.x += f.vx * k * k * dt;
+        f.y += (f.vy * k + Math.sin(this.t * 3 + f.ph) * 28) * dt;
+        if (f.x < -40 || f.y < -40) this.flyers.splice(i, 1);
+      }
     }
     for (let i = 0; i < this.petals.length; i++) {
       const p = this.petals[i];
@@ -237,10 +285,18 @@ export class TitleScene {
       }
     }
 
-    crisp.drawImage(this.front, 0, 0);
+    if (this.frontAlpha > 0) {
+      crisp.globalAlpha = this.frontAlpha;
+      crisp.drawImage(this.front, 0, 0);
+      crisp.globalAlpha = 1;
+    }
+    for (const f of this.flyers) {
+      if (f.near || this.gameT < f.delay) continue;
+      crisp.drawImage(f.img, Math.round(f.x - f.img.width / 2), Math.round(f.y - f.img.height / 2));
+    }
 
     for (const s of this.sparkles) {
-      const a = Math.sin(this.t * s.w + s.ph);
+      const a = Math.sin(this.t * s.w + s.ph) * this.frontAlpha;
       if (a <= 0.3) continue;
       crisp.fillStyle = `rgba(255,255,255,${(a * 0.95).toFixed(3)})`;
       crisp.fillRect(s.x, s.y, 1, 1);
@@ -254,7 +310,17 @@ export class TitleScene {
 
     // Capa de niebla: bancos que derivan + rayos de luz desde arriba a la izquierda.
     haze.clearRect(0, 0, SW, SH);
-    haze.drawImage(this.frontSoft, 0, 0);
+    if (this.frontAlpha > 0) {
+      haze.globalAlpha = this.frontAlpha;
+      haze.drawImage(this.frontSoft, 0, 0);
+      haze.globalAlpha = 1;
+    }
+    // Flores que pasan muy cerca de la cámara: grandes y borrosas.
+    for (const f of this.flyers) {
+      if (!f.near || this.gameT < f.delay) continue;
+      const w = f.img.width * 0.45, h = f.img.height * 0.45;
+      haze.drawImage(f.img, f.x / 4 - w / 2, f.y / 4 - h / 2, w, h);
+    }
     const fogK = 0.4 + 0.6 * this.focus;
     for (const f of this.fog) {
       const g = haze.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.rx);
@@ -513,6 +579,23 @@ const TONE_LILAC: Tone = { light: '#ebe3f9', mid: '#c9b6ec', dark: '#a893dc', de
 const TONE_PINK: Tone = { light: '#f1e6f8', mid: '#d4bceb', dark: '#b89ad8', deep: '#9776bf' };
 // Luz desde arriba a la izquierda.
 const LIGHT: Pt = [-0.707, -0.707];
+// Círculos que definen el volumen del racimo de primer plano.
+const FG_MASS: [number, number, number][] = [[275, 105, 46], [300, 60, 38], [258, 150, 36], [300, 150, 40], [270, 30, 30], [318, 105, 34], [236, 120, 22]];
+
+// Sprites sueltos para el viento.
+function renderFloret(rng: Rng, S: number, rot: number): HTMLCanvasElement {
+  const size = Math.ceil(S * 2.3) + 4;
+  const pb = new PixelBuffer(size, size);
+  bigFloret(pb, rng, size >> 1, size >> 1, S, rot, 0.04);
+  return pb.toCanvas();
+}
+function renderPetal(col: string, kind: number): HTMLCanvasElement {
+  const pb = new PixelBuffer(3, 2);
+  const c = hex(col);
+  if (kind === 0) { pb.rect(0, 0, 2, 2, c); }
+  else { pb.rect(0, 0, 2, 1, c); pb.rect(1, 1, 2, 1, c); }
+  return pb.toCanvas();
+}
 
 // Pétalo: elipse alargada que se afina hacia la punta, rotada `ang`.
 // `lit` (-1..1) = cuánto mira hacia la luz. `solid` pinta silueta plana.
@@ -594,7 +677,7 @@ function budBig(pb: PixelBuffer, x: number, y: number, ang: number, len: number,
 
 function paintForeground(pb: PixelBuffer, rng: Rng, dew: Pt[]): void {
   // Sombra entre flores: solo donde el racimo es denso (más chica que las flores).
-  const mass: [number, number, number][] = [[275, 105, 46], [300, 60, 38], [258, 150, 36], [300, 150, 40], [270, 30, 30], [318, 105, 34], [236, 120, 22]];
+  const mass = FG_MASS;
   for (const [x, y, r] of mass) pb.circle(x, y, r - 7, fogged(C.lilacDeep, 0.1));
   // Relleno denso de flores medianas, de atrás (más brumosas) hacia adelante.
   // Muestreo ponderado por área para que los círculos grandes no queden ralos.

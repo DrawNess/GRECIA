@@ -47,8 +47,11 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   mayúsculas.
 - Segunda validación (fecha `DD/MM/AAAA`): lista en código; se activa al
   poner `dateHash` (generar con `pnpm hash "DD/MM/AAAA"`).
-- Al validar, el panel desaparece, la neblina y el desenfoque se despejan y
-  Grecia queda bajo control en el mismo escenario (flechas / WASD).
+- El nombre se pide en cada visita (es el inicio de sesión).
+- Al validar, el panel desaparece, la neblina y el desenfoque se despejan, un
+  golpe de viento deshace el racimo del frente (flores y pétalos vuelan hacia
+  la izquierda por delante de la cámara) y Grecia queda bajo control en el
+  mismo escenario (flechas / WASD).
 
 ## Publicar (una sola vez)
 

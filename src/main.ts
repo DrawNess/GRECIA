@@ -7,7 +7,7 @@ import './style.css';
 import { Stage } from './engine/stage';
 import { Input } from './engine/input';
 import { startLoop } from './engine/loop';
-import { loadSave, writeSave, resetSave } from './engine/save';
+import { writeSave, resetSave } from './engine/save';
 import { TitleScene } from './scenes/title';
 import { mountGate, showCaption } from './ui/gate';
 import { gate } from './content/gate';
@@ -43,14 +43,12 @@ function enterGame(showHint: boolean): void {
   if (showHint) showCaption(stage.ui, gate.moveHint, 5000);
 }
 
-if (loadSave().unlocked) {
+// El nombre se pide en cada visita: es el "inicio de sesión" y parte del ritual.
+// El guardado queda para el progreso de las etapas siguientes.
+mountGate(stage.ui, fav.toDataURL(), () => {
+  writeSave({ unlocked: true });
   enterGame(true);
-} else {
-  mountGate(stage.ui, fav.toDataURL(), () => {
-    writeSave({ unlocked: true });
-    enterGame(true);
-  });
-}
+});
 
 // Entrada en fundido desde crema (setTimeout: no depende de que rAF esté activo).
 const veil = document.getElementById('veil')!;
