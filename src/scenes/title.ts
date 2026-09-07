@@ -15,7 +15,8 @@ const HORIZON = 150;
 const NIGHT_FROM = 340, NIGHT_TO = 660;
 const nightAt = (x: number) => { const t = Math.min(1, Math.max(0, (x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM))); return t * t * (3 - 2 * t); };
 // La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
-const STREET = { x0: 600, wallX0: 612, wallX1: 986, x1: 1046, wallTop: 92, door: 878, pole: 998, booth: 1006 };
+// x0..x1 pavimento · wallX0..wallX1 la pared · house su casa · streetX0..x1 la calle que entra
+const STREET = { x0: 600, wallX0: 612, wallX1: 986, house: 996, streetX0: 1040, x1: 1096, wallTop: 92, pole: 1064 };
 const BENCH = { x: 1190, baseY: 165 };
 const PAR_FAR = 0.2, PAR_MID = 0.45;
 const FAR_W = Math.ceil(VW + PAR_FAR * (WORLD_W - VW));
@@ -71,7 +72,7 @@ export class TitleScene {
   private readonly seated: HTMLCanvasElement;
   private readonly lights: Light[] = [];
   // Luz roja de la cámara de la caseta (parpadea).
-  private readonly cameraLed: Pt = [STREET.booth + 1, 133];
+  private readonly cameraLed: Pt = [STREET.house + 1, HORIZON - 27];
   private readonly stars: Star[] = [];
   readonly icon: HTMLCanvasElement;
 
@@ -130,7 +131,7 @@ export class TitleScene {
     paintStreet(world, rng);
     paintCanopyAt(world, rng, dew, 160, 40, 200, 82, 1);
     paintCanopyAt(world, rng, dew, 500, 70, 66, 44, 0.62);
-    paintCanopyAt(world, rng, dew, 1100, 64, 72, 48, 0.66);
+    paintCanopyAt(world, rng, dew, 1128, 64, 72, 48, 0.66);
     // Luz de los faroles sobre el suelo, ya horneada (la noche no cambia).
     for (const lx of LAMPS) {
       const n = nightAt(lx);
@@ -141,15 +142,16 @@ export class TitleScene {
     // ── Objetos ──
     this.addTrunk(rng, MAIN_TREE.x, MAIN_TREE.base, MAIN_TREE.top, 8, [[[-2, 104], [112, 66]], [[-1, 100], [156, 44]], [[2, 104], [231, 62]], [[3, 110], [248, 104]]], 10);
     this.addTrunk(rng, 500, 153, 112, 4.5, [[[-1, 118], [470, 94]], [[1, 114], [506, 86]], [[2, 118], [532, 98]]], 6);
-    this.addTrunk(rng, 1100, 153, 108, 5, [[[-1, 114], [1064, 88]], [[0, 110], [1106, 78]], [[2, 114], [1138, 92]]], 7);
+    this.addTrunk(rng, 1128, 153, 108, 5, [[[-1, 114], [1092, 88]], [[0, 110], [1134, 78]], [[2, 114], [1166, 92]]], 7);
     // Faroles al borde del pasto, sin estorbar la vereda. De noche, encendidos.
     for (const x of LAMPS) {
       this.addProp('lamp', renderLamp(nightAt(x)), x, 164, 3, { hw: 2, depth: 3 });
       this.lights.push({ x, y: 164 - 39, r: 12, col: '255,225,160', a: 0.5 * nightAt(x) });
     }
-    // Poste de la calle que entra y ventanita de la caseta.
+    // Poste de la calle que entra, luz del portal y ventana de su casa.
     this.lights.push({ x: STREET.pole + 5, y: 120, r: 7, col: '255,225,160', a: 0.45 });
-    this.lights.push({ x: STREET.booth + 6, y: 143, r: 4, col: '255,220,150', a: 0.3 });
+    this.lights.push({ x: STREET.house + 10, y: HORIZON - 23, r: 5, col: '255,225,160', a: 0.32 });
+    this.lights.push({ x: STREET.house + 27, y: HORIZON - 15, r: 6, col: '255,220,150', a: 0.3 });
     // La banca grande, con él sentado mirando hacia donde llegará ella.
     this.addProp('bench', renderBench(HIM_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
     this.addProp('gate', renderGate(rng), 1412, 160, 16, { hw: 15, depth: 4 });
@@ -751,7 +753,7 @@ function paintGround(pb: PixelBuffer, rng: Rng): void {
     const col = fogged(rng.pick([C.leaf, C.leafLight, C.groundLight]), 0.3);
     pb.set(x, y, col); pb.set(x + 2, y, col); pb.set(x + 1, y + 1, col);
   }
-  for (const [tx, n] of [[160, 60], [500, 24], [1100, 26]] as Pt[]) {
+  for (const [tx, n] of [[160, 60], [500, 24], [1128, 26]] as Pt[]) {
     for (let i = 0; i < n; i++) pb.set(tx + Math.round(rng.range(-90, 90)), HORIZON + rng.int(VH - HORIZON), hex(rng.pick(PETAL_COLS)));
   }
 }
@@ -759,7 +761,7 @@ function paintGround(pb: PixelBuffer, rng: Rng): void {
 // La esquina verde: pavimento, pared verde con la puerta y la ventana de su
 // casa, y la calle que dobla en la esquina.
 function paintStreet(pb: PixelBuffer, rng: Rng): void {
-  const { x0, x1, wallX0, wallX1, wallTop, door, pole, booth } = STREET;
+  const { x0, x1, wallX0, wallX1, wallTop, house, streetX0, pole } = STREET;
   // Pavimento de baldosas entre la pared y la vereda.
   for (let y = HORIZON; y < 167; y++) {
     for (let x = x0; x < x1; x++) {
@@ -781,46 +783,53 @@ function paintStreet(pb: PixelBuffer, rng: Rng): void {
     const x = wallX0 + 20 + rng.int(60), y = wallTop + 3 + rng.int(40);
     if (rng.next() < 0.4 + (y - wallTop) / 100) { pb.set(x, y, hex(rng.pick([C.leafDark, C.leaf]))); pb.set(x + 1, y, hex(C.leafDark)); }
   }
-  // Lado de la esquina (la pared dobla hacia el fondo) y la calle que entra.
+  // Lado de la esquina: la pared dobla hacia el fondo.
   pb.rect(wallX1, wallTop + 2, 6, HORIZON - wallTop - 2, hex(C.wallSide));
   pb.rect(wallX1, wallTop + 2, 6, 2, hex(C.wallDark));
-  pb.poly([[wallX1 + 8, wallTop + 44], [wallX1 + 22, wallTop + 44], [x1, HORIZON + 6], [wallX1 + 6, HORIZON + 6]], hex(C.asphalt));
-  pb.poly([[wallX1 + 6, HORIZON + 6], [x1, HORIZON + 6], [x1, HORIZON + 8], [wallX1 + 6, HORIZON + 8]], hex(C.curb));
+
+  // Su casa, pegada a la pared: un piso, techo plano con pretil, puerta con luz
+  // en el portal, ventana encendida con cortinas y la cámara en la esquina del techo.
+  const hb = HORIZON - 1, hw = 40;
+  pb.rect(house, hb - 26, hw, 26, hex('#e8dccb'));
+  pb.rect(house + hw - 5, hb - 26, 5, 26, hex('#c9bcaa')); // lado en sombra
+  pb.rect(house - 2, hb - 30, hw + 4, 4, hex('#8a7f78')); // pretil
+  pb.rect(house - 2, hb - 31, hw + 4, 1, hex('#a59a92'));
+  pb.rect(house - 2, hb - 27, hw + 4, 1, hex('#6f6660'));
+  pb.rect(house, hb - 1, hw - 5, 1, hex('#bfb3a4')); // zócalo
+  // Puerta.
+  pb.rect(house + 5, hb - 21, 11, 21, hex(C.outline));
+  pb.rect(house + 6, hb - 20, 9, 20, hex(C.door));
+  pb.rect(house + 10, hb - 20, 1, 20, hex(C.doorDark));
+  pb.rect(house + 7, hb - 18, 3, 7, hex(C.doorDark)); pb.rect(house + 11, hb - 18, 3, 7, hex(C.doorDark));
+  pb.set(house + 9, hb - 10, hex(C.flowerCenter));
+  pb.rect(house + 4, hb, 13, 1, hex(C.pavementSeam)); // escalón
+  // Luz del portal.
+  pb.rect(house + 8, hb - 24, 5, 2, hex('#3b3236')); pb.rect(house + 9, hb - 23, 3, 1, hex(C.lampLight));
+  // Ventana con cortinas.
+  pb.rect(house + 20, hb - 21, 15, 12, hex(C.windowFrame));
+  pb.rect(house + 21, hb - 20, 13, 10, hex(C.windowLight));
+  pb.rect(house + 27, hb - 20, 1, 10, hex(C.windowFrame)); pb.rect(house + 21, hb - 16, 13, 1, hex(C.windowFrame));
+  for (let y = hb - 20; y < hb - 10; y++) { pb.set(house + 21 + (y & 1), y, hex(C.lilacLight)); pb.set(house + 33 - (y & 1), y, hex(C.lilacLight)); }
+  pb.rect(house + 19, hb - 9, 17, 1, hex('#bfb3a4')); // alféizar
+  // Número de la casa y una maceta.
+  pb.rect(house + 18, hb - 25, 3, 2, hex('#f4efe6'));
+  pb.rect(house + 36, hb - 5, 4, 5, hex('#a7674f')); for (let i = 0; i < 6; i++) pb.set(house + 36 + rng.int(4), hb - 8 + rng.int(4), hex(rng.pick([C.leaf, C.leafDark])));
+  // Cámara de seguridad bajo el pretil, mirando hacia la esquina (su luz roja parpadea en el juego).
+  pb.rect(house, hb - 26, 4, 2, hex('#3b3236')); pb.set(house - 1, hb - 26, hex('#8fb3d9')); pb.set(house + 3, hb - 24, hex('#3b3236'));
+
+  // La calle que entra, a la derecha de su casa, con un poste de luz al centro.
+  pb.poly([[streetX0 + 12, wallTop + 44], [streetX0 + 30, wallTop + 44], [x1, HORIZON + 6], [streetX0, HORIZON + 6]], hex(C.asphalt));
+  pb.poly([[streetX0, HORIZON + 6], [x1, HORIZON + 6], [x1, HORIZON + 8], [streetX0, HORIZON + 8]], hex(C.curb));
   for (let t = 0; t < 1; t += 0.12) {
-    const y = wallTop + 46 + t * (HORIZON - wallTop - 40), x = wallX1 + 15 + t * ((x1 - wallX1) / 2 - 15);
+    const y = wallTop + 46 + t * (HORIZON - wallTop - 40), x = streetX0 + 21 + t * ((x1 - streetX0) / 2 - 21);
     pb.rect(Math.round(x), Math.round(y), 1, 2, hex(C.curb, 160));
   }
-  // La puerta de su casa.
-  pb.rect(door - 1, HORIZON - 36, 20, 36, hex(C.outline));
-  pb.rect(door, HORIZON - 35, 18, 35, hex(C.door));
-  pb.rect(door + 8, HORIZON - 35, 1, 35, hex(C.doorDark));
-  pb.rect(door + 2, HORIZON - 31, 5, 12, hex(C.doorDark)); pb.rect(door + 11, HORIZON - 31, 5, 12, hex(C.doorDark));
-  pb.rect(door + 2, HORIZON - 16, 5, 12, hex(C.doorDark)); pb.rect(door + 11, HORIZON - 16, 5, 12, hex(C.doorDark));
-  pb.set(door + 6, HORIZON - 18, hex(C.lampLight)); pb.set(door + 6, HORIZON - 17, hex(C.flowerCenter));
-  pb.rect(door - 3, HORIZON - 39, 24, 3, hex(C.wallDark)); // dintel
-  pb.rect(door - 2, HORIZON, 22, 2, hex(C.pavementSeam)); // escalón
-  // En medio de la calle que entra: un poste de luz y la caseta de vigilancia con su cámara.
   const base = HORIZON + 1;
-  pb.ellipse(pole + 5, base, 12, 3, [255, 225, 160, 70]); // luz del poste en el asfalto
+  pb.ellipse(pole + 5, base, 12, 3, [255, 225, 160, 70]);
   pb.rect(pole - 1, base - 1, 4, 2, hex('#4a4650'));
   pb.rect(pole, base - 33, 2, 33, hex('#5a5560')); pb.rect(pole, base - 33, 1, 33, hex('#6e6975'));
   pb.rect(pole + 2, base - 33, 5, 1, hex('#5a5560')); pb.rect(pole + 6, base - 32, 1, 1, hex('#5a5560'));
   pb.rect(pole + 4, base - 31, 4, 1, hex('#3b3236')); pb.rect(pole + 4, base - 30, 4, 2, hex(C.lampLight)); pb.set(pole + 5, base - 30, hex('#ffffff'));
-  // Caseta: cuerpo claro con lado en sombra, techo de pizarra, ventanita encendida y puerta.
-  pb.rect(booth, base - 15, 14, 15, hex('#cfc6bd')); pb.rect(booth + 11, base - 15, 3, 15, hex('#a9a19a'));
-  pb.rect(booth - 1, base - 17, 16, 2, hex('#5f5a6a')); pb.rect(booth - 1, base - 18, 16, 1, hex('#77718a'));
-  pb.rect(booth + 3, base - 12, 5, 4, hex('#6a7a9a')); pb.rect(booth + 4, base - 11, 3, 2, hex(C.windowLight)); // ventana
-  pb.rect(booth + 9, base - 8, 3, 8, hex('#7a6b5a')); pb.set(booth + 10, base - 4, hex(C.flowerCenter)); // puerta
-  pb.rect(booth, base - 1, 14, 1, hex('#8d857e'));
-  // Cámara en la esquina del techo: cuerpo oscuro, lente y su luz roja (parpadea en el juego).
-  pb.rect(booth, base - 21, 4, 2, hex('#3b3236')); pb.set(booth - 1, base - 21, hex('#8fb3d9')); pb.rect(booth + 2, base - 19, 1, 1, hex('#3b3236'));
-  // Macetas junto a la puerta.
-  for (const px of [door - 12, door + 26]) {
-    pb.rect(px, HORIZON - 6, 6, 6, hex('#a7674f')); pb.rect(px + 1, HORIZON - 6, 4, 1, hex('#c28667'));
-    for (let i = 0; i < 8; i++) pb.set(px + 1 + rng.int(4), HORIZON - 9 + rng.int(4), hex(rng.pick([C.leaf, C.leafDark, C.leafLight])));
-  }
-  // Buzón.
-  pb.rect(door - 24, HORIZON - 22, 6, 8, hex('#7a6b8f')); pb.rect(door - 24, HORIZON - 22, 6, 2, hex('#9a8bb0')); pb.rect(door - 22, HORIZON - 14, 2, 14, hex(C.outline));
 }
 
 const LAMPS = [420, 655, 955, 1270];
