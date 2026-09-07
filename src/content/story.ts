@@ -2,4 +2,5 @@
 export const story = {
   herName: 'Grecia',
   himName: 'Jhammil',
+  dragonName: 'Chimuelo',
 };

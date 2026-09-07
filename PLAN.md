@@ -51,6 +51,9 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   sentado (cabello corto, camisa blanca, un poco más alto que ella); su nombre
   aparece en una etiqueta al acercarse. Con J junto a la banca, Grecia se sienta a su
   lado y quedan mirándose; cualquier flecha la levanta.
+- Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
+  soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va
+  volando; si ella se aleja un rato, vuelve a dormirse.
 - Puerta de jardín cerrada al final (meta, placeholder).
 - Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.
 

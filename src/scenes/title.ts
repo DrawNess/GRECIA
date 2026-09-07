@@ -19,6 +19,8 @@ const nightAt = (x: number) => { const t = Math.min(1, Math.max(0, (x - NIGHT_FR
 // x0..x1 pavimento · wallX0..wallX1 la pared · house su casa · streetX0..x1 la calle que entra
 const STREET = { x0: 600, wallX0: 612, wallX1: 986, house: 996, streetX0: 1040, x1: 1096, wallTop: 92, pole: 1064 };
 const BENCH = { x: 1190, baseY: 165 };
+// Chimuelo duerme después de la banca, sobre el pasto.
+const DRAGON = { x: 1300, baseY: 164, w: 44, h: 30 };
 const PAR_FAR = 0.2, PAR_MID = 0.45;
 const FAR_W = Math.ceil(VW + PAR_FAR * (WORLD_W - VW));
 const MID_W = Math.ceil(VW + PAR_MID * (WORLD_W - VW));
@@ -41,8 +43,10 @@ interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; p
 type Secret = 'none' | 'butterflies' | 'birds';
 type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate';
 interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number } }
-// Mariposa, pájaro o pétalo que sale de un arbusto (coordenadas de mundo).
-interface Critter { kind: 'butterfly' | 'bird' | 'puff'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
+// Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
+interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
+type DragonState = 'sleep' | 'wake' | 'fly' | 'gone';
+interface Dragon { state: DragonState; t: number; x: number; y: number; vx: number; vy: number; hearts: boolean; lastZ: number }
 type Facing = 'up' | 'down' | 'left' | 'right';
 interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number; sitting: boolean }
 // Luz nocturna (mundo): farol o ventana; brilla según lo oscuro que esté ahí.
@@ -71,6 +75,8 @@ export class TitleScene {
   private readonly girlShadow: HTMLCanvasElement;
   private readonly marker: HTMLCanvasElement;
   private readonly seated: HTMLCanvasElement;
+  private readonly dragonImgs: { sleep: HTMLCanvasElement[]; wake: HTMLCanvasElement; fly: HTMLCanvasElement[] };
+  private readonly dragon: Dragon = { state: 'sleep', t: 0, x: DRAGON.x, y: DRAGON.baseY - DRAGON.h + 3, vx: 0, vy: 0, hearts: false, lastZ: 0 };
   private readonly lights: Light[] = [];
   // Luz roja de la cámara de la caseta (parpadea).
   private readonly cameraLed: Pt = [STREET.house + 1, HORIZON - 27];
@@ -157,6 +163,11 @@ export class TitleScene {
     this.addProp('bench', renderBench(JHAMMIL_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
     this.addProp('gate', renderGate(rng), 1412, 160, 16, { hw: 15, depth: 4 });
     this.seated = GRECIA_SEATED.toCanvas();
+    this.dragonImgs = {
+      sleep: [renderDragon('sleep', 0), renderDragon('sleep', 1)],
+      wake: renderDragon('wake', 0),
+      fly: [renderDragon('fly', 0), renderDragon('fly', 1)],
+    };
     for (const [cx, baseY, r] of bushSpots(rng, this.props)) {
       const v = rng.next();
       this.addProp('bush', renderBush(rng, r).toCanvas(), cx, baseY, r, undefined, v < 0.42 ? 'none' : v < 0.74 ? 'butterflies' : 'birds');
@@ -229,8 +240,12 @@ export class TitleScene {
 
   /** Etiqueta con el nombre de Jhammil (coordenadas de pantalla) cuando ella está cerca de la banca. */
   nameTag(): { text: string; x: number; y: number } | null {
-    if (this.mode !== 'game' || !(this.player.sitting || this.nearProp?.kind === 'bench')) return null;
-    return { text: story.himName, x: BENCH.x + 9 - Math.round(this.camX), y: BENCH.baseY - 29 };
+    if (this.mode !== 'game') return null;
+    const cam = Math.round(this.camX);
+    if (this.player.sitting || this.nearProp?.kind === 'bench') return { text: story.himName, x: BENCH.x + 9 - cam, y: BENCH.baseY - 29 };
+    const d = this.dragon;
+    if (d.state === 'wake' || (d.state === 'fly' && d.t < 1.5)) return { text: story.dragonName, x: Math.round(d.x) + 12 - cam, y: Math.round(d.y) - 3 };
+    return null;
   }
 
   /** Tras el menú: se despeja la escena y Grecia pasa a controlarse con el teclado. */
@@ -360,6 +375,40 @@ export class TitleScene {
     }
   }
 
+  // Chimuelo: duerme; cuando Grecia se acerca despierta, suelta corazones y se
+  // va volando. Si ella se aleja un rato, vuelve a dormirse en su sitio.
+  private updateDragon(dt: number): void {
+    const d = this.dragon;
+    d.t += dt;
+    const px = this.player.x + GIRL_W / 2;
+    const r = this.rng;
+    if (d.state === 'sleep') {
+      if (this.t - d.lastZ > 1.7) {
+        d.lastZ = this.t;
+        this.critters.push({ kind: 'zz', x: d.x + 10, y: d.y + 12, vx: 6, vy: -9, ph: r.range(0, 6.28), t: 0, life: 1.9, col: C.white });
+      }
+      if (!this.player.sitting && Math.abs(px - (d.x + DRAGON.w / 2)) < 48) { d.state = 'wake'; d.t = 0; }
+    } else if (d.state === 'wake') {
+      if (!d.hearts && d.t > 0.45) {
+        d.hearts = true;
+        for (let i = 0; i < 8; i++) {
+          this.critters.push({ kind: 'heart', x: d.x + 4 + r.range(0, 16), y: d.y + 2 + r.range(0, 8), vx: r.range(-10, 10), vy: -r.range(14, 26), ph: r.range(0, 6.28), t: -r.range(0, 0.6), life: 2.6, col: r.pick(['#f38fb1', '#f7a8c4', '#e86f9a']) });
+        }
+      }
+      if (d.t > 1.9) { d.state = 'fly'; d.t = 0; d.vx = 26; d.vy = -22; }
+    } else if (d.state === 'fly') {
+      d.vx += 22 * dt; d.vy -= 26 * dt;
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      if (d.t < 1.2 && r.next() < 0.15) {
+        this.critters.push({ kind: 'heart', x: d.x + 16, y: d.y + 10, vx: r.range(-8, 8), vy: -r.range(8, 16), ph: r.range(0, 6.28), t: 0, life: 1.8, col: '#f7a8c4' });
+      }
+      if (d.y < -50 || d.x > WORLD_W + 60) { d.state = 'gone'; d.t = 0; }
+    } else if (d.t > 14 && Math.abs(px - DRAGON.x) > 170) {
+      d.state = 'sleep'; d.t = 0; d.hearts = false;
+      d.x = DRAGON.x; d.y = DRAGON.baseY - DRAGON.h + 3;
+    }
+  }
+
   private updateCritters(dt: number): void {
     for (let i = this.critters.length - 1; i >= 0; i--) {
       const c = this.critters[i];
@@ -368,6 +417,9 @@ export class TitleScene {
       if (c.kind === 'puff') {
         c.vy += 70 * dt;
         c.x += c.vx * dt; c.y += c.vy * dt;
+      } else if (c.kind === 'heart' || c.kind === 'zz') {
+        c.x += (c.vx + Math.sin(c.t * 3 + c.ph) * 8) * dt;
+        c.y += c.vy * dt;
       } else if (c.kind === 'butterfly') {
         c.vy += (-14 - c.vy) * 0.4 * dt;
         c.x += (c.vx + Math.sin(c.t * 4.2 + c.ph) * 22) * dt;
@@ -395,6 +447,7 @@ export class TitleScene {
         if (input.take(ACTION) && this.nearProp) this.poke(this.nearProp);
       }
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
+      this.updateDragon(dt);
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
         const f = this.flyers[i];
@@ -462,6 +515,14 @@ export class TitleScene {
       const shake = pr.shake > 0 ? Math.round(Math.sin(pr.shake * 40) * 1.5) : 0;
       items.push({ baseY: pr.baseY, draw: () => ctx.drawImage(pr.img, sx + shake, pr.y) });
     }
+    const d = this.dragon;
+    if (d.state !== 'gone') {
+      const img = d.state === 'sleep' ? this.dragonImgs.sleep[Math.floor(this.t / 0.9) & 1]
+        : d.state === 'wake' ? this.dragonImgs.wake
+        : this.dragonImgs.fly[Math.floor(this.t / 0.14) & 1];
+      const dx = Math.round(d.x) - cam, dy = Math.round(d.y);
+      if (dx < VW && dx + DRAGON.w > 0) items.push({ baseY: d.state === 'fly' ? 9999 : DRAGON.baseY, draw: () => ctx.drawImage(img, dx, dy) });
+    }
     if (withPlayer) {
       const p = this.player;
       if (p.sitting) {
@@ -518,6 +579,17 @@ export class TitleScene {
       if (c.kind === 'puff') {
         crisp.globalAlpha = Math.max(0, 1 - c.t / c.life);
         crisp.fillRect(x, y, 2, 2);
+        crisp.globalAlpha = 1;
+      } else if (c.kind === 'heart') {
+        crisp.globalAlpha = Math.max(0, Math.min(1, (c.life - c.t) / 0.8));
+        crisp.fillRect(x - 2, y - 1, 2, 1); crisp.fillRect(x + 1, y - 1, 2, 1);
+        crisp.fillRect(x - 2, y, 5, 2); crisp.fillRect(x - 1, y + 2, 3, 1); crisp.fillRect(x, y + 3, 1, 1);
+        crisp.fillStyle = '#ffd2e1'; crisp.fillRect(x - 1, y, 1, 1);
+        crisp.globalAlpha = 1;
+      } else if (c.kind === 'zz') {
+        crisp.globalAlpha = Math.max(0, Math.min(1, (c.life - c.t) / 0.7));
+        crisp.fillStyle = '#f4f0ff';
+        crisp.fillRect(x, y, 3, 1); crisp.fillRect(x + 1, y + 1, 1, 1); crisp.fillRect(x, y + 2, 3, 1);
         crisp.globalAlpha = 1;
       } else if (c.kind === 'butterfly') {
         if (c.t > c.life - 1) crisp.globalAlpha = c.life - c.t;
@@ -962,6 +1034,7 @@ function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
     const baseY = 153 + rng.int(26);
     if (x > STREET.x0 - 20 && x < STREET.x1 + 16) continue; // la esquina verde es pavimento
     if (Math.abs(x - BENCH.x) < 52) continue; // espacio libre alrededor de la banca
+    if (Math.abs(x - DRAGON.x - DRAGON.w / 2) < 44) continue; // y alrededor de Chimuelo
     if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
     spots.push([x, baseY, r]);
   }
@@ -1052,6 +1125,85 @@ function renderGate(rng: Rng): HTMLCanvasElement {
     floret(pb, x, y, 1, 0.05, rng.range(0.3, 1), rng);
   }
   for (let i = 0; i < 10; i++) pb.set(rng.int(34), 5 + rng.int(6), hex(C.leaf));
+  return pb.toCanvas();
+}
+
+// Chimuelo: dragón negro con brillos, orejitas, ojos verdes enormes, alas de
+// murciélago y aleta roja en la cola. Mira a la izquierda (por donde llega ella).
+function renderDragon(pose: 'sleep' | 'wake' | 'fly', frame: number): HTMLCanvasElement {
+  const pb = new PixelBuffer(DRAGON.w, DRAGON.h);
+  const O = hex('#141319'), K = hex('#25232c'), k = hex('#3d3a48'), W = hex('#2e2b38'), w = hex('#46425a');
+  const G = hex('#9be24a'), R = hex('#a8433f'), T = hex('#e8e6e0');
+  const curve = (a: Pt, c: Pt, b: Pt, n = 14): Pt[] => {
+    const out: Pt[] = [];
+    for (let i = 0; i <= n; i++) { const t = i / n, u = 1 - t; out.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]); }
+    return out;
+  };
+  const tube = (pts: Pt[], r0: number, r1: number) => {
+    pts.forEach(([x, y], i) => pb.circle(x, y, Math.round(r0 + (r1 - r0) * (i / (pts.length - 1))) + 1, O));
+    pts.forEach(([x, y], i) => pb.circle(x, y, Math.round(r0 + (r1 - r0) * (i / (pts.length - 1))), K));
+  };
+  const eyes = (x: number, y: number) => {
+    for (const ex of [x, x + 6]) { pb.circle(ex, y, 2, O); pb.circle(ex, y, 1, G); pb.set(ex + 1, y, G); pb.set(ex, y - 1, hex('#c8f58a')); pb.rect(ex, y, 1, 2, O); }
+  };
+  const ears = (x: number, y: number, up: number) => {
+    for (const [dx, dy] of [[-4, 1], [0, 0], [4, 1]] as Pt[]) { pb.rect(x + dx - 1, y + dy - up, 3, 3 + up, O); pb.rect(x + dx, y + dy - up + 1, 1, 2 + up, K); }
+  };
+  if (pose !== 'fly') {
+    const dy = pose === 'sleep' && frame === 1 ? -1 : 0;
+    pb.ellipse(22, 27, 19, 2, hex(C.shadow, 70));
+    // Cola: sale del cuerpo por la derecha, baja y vuelve al frente, con la aleta roja.
+    tube(curve([30, 21], [46, 27], [30, 27]), 2, 1);
+    pb.poly([[30, 24], [24, 28], [33, 29]], O); pb.poly([[30, 25], [26, 28], [32, 28]], R);
+    pb.poly([[31, 23], [37, 24], [32, 27]], O); pb.poly([[32, 24], [35, 25], [32, 26]], K);
+    // Cuerpo enroscado.
+    pb.ellipse(22, 20 + dy, 12, 7, O); pb.ellipse(22, 20 + dy, 11, 6, K); pb.ellipse(19, 17 + dy, 6, 2, k);
+    // Ala plegada sobre el lomo, con sus dedos.
+    pb.poly([[11, 15 + dy], [33, 12 + dy], [31, 19 + dy], [15, 21 + dy]], O);
+    pb.poly([[13, 15 + dy], [32, 13 + dy], [30, 18 + dy], [16, 20 + dy]], W);
+    pb.poly([[14, 15 + dy], [24, 14 + dy], [22, 16 + dy], [16, 17 + dy]], w);
+    for (const [a, b] of [[[14, 15], [28, 18]], [[13, 15], [31, 14]], [[15, 16], [26, 20]]] as [Pt, Pt][]) {
+      for (let t = 0; t <= 1; t += 0.08) pb.set(Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t + dy), O);
+    }
+    // Pata delantera con garras.
+    pb.ellipse(15, 25, 4, 2, O); pb.ellipse(15, 25, 3, 1, K); pb.set(12, 26, T); pb.set(14, 26, T);
+    if (pose === 'sleep') {
+      // Cabeza apoyada, ojos cerrados.
+      pb.ellipse(9, 21 + dy, 6, 5, O); pb.ellipse(9, 21 + dy, 5, 4, K); pb.ellipse(8, 19 + dy, 3, 1, k);
+      ears(9, 15 + dy, 0);
+      pb.rect(5, 21 + dy, 3, 1, k); pb.rect(10, 21 + dy, 3, 1, k);
+      pb.set(4, 23 + dy, k); pb.set(5, 23 + dy, k);
+    } else {
+      // Despierto: cuello erguido, cabeza en alto, ojos abiertos.
+      tube(curve([14, 18], [12, 14], [10, 12]), 3, 3);
+      pb.ellipse(9, 10, 6, 5, O); pb.ellipse(9, 10, 5, 4, K); pb.ellipse(8, 8, 3, 1, k);
+      ears(9, 5, 1);
+      eyes(6, 10);
+      pb.rect(4, 13, 4, 1, O); pb.set(4, 12, k);
+    }
+  } else {
+    const up = frame === 0;
+    // Cuerpo horizontal y cabeza al frente.
+    pb.ellipse(22, 17, 12, 5, O); pb.ellipse(22, 17, 11, 4, K); pb.ellipse(20, 15, 6, 1, k);
+    pb.ellipse(9, 15, 6, 5, O); pb.ellipse(9, 15, 5, 4, K); pb.ellipse(8, 13, 3, 1, k);
+    ears(9, 10, 1);
+    eyes(6, 15);
+    pb.rect(4, 18, 4, 1, O);
+    // Cola extendida con aletas.
+    tube(curve([33, 17], [38, 17], [42, 21]), 2, 1);
+    pb.poly([[41, 20], [44, 17], [44, 24]], O); pb.poly([[42, 20], [44, 18], [44, 23]], R);
+    pb.poly([[40, 21], [37, 24], [43, 24]], O); pb.poly([[40, 22], [38, 24], [42, 24]], K);
+    // Alas grandes: arriba o abajo.
+    const wing: Pt[] = up ? [[15, 14], [7, 1], [21, 0], [33, 3], [27, 14]] : [[15, 19], [8, 29], [22, 29], [34, 26], [27, 19]];
+    pb.poly(wing, O);
+    pb.poly(wing.map(([x, y]) => [x + (x < 20 ? 1 : -1), y + (up ? 1 : -1)] as Pt), W);
+    for (const tip of wing.slice(1, 4)) {
+      for (let t = 0; t <= 1; t += 0.06) pb.set(Math.round(21 + (tip[0] - 21) * t), Math.round((up ? 14 : 19) + (tip[1] - (up ? 14 : 19)) * t), O);
+    }
+    pb.poly([[17, up ? 13 : 20], [12, up ? 6 : 26], [20, up ? 5 : 27]], w);
+    // Patas recogidas.
+    pb.ellipse(16, 21, 3, 1, O); pb.ellipse(27, 21, 3, 1, O); pb.ellipse(16, 21, 2, 1, K); pb.ellipse(27, 21, 2, 1, K);
+  }
   return pb.toCanvas();
 }
 
