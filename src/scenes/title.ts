@@ -6,11 +6,17 @@ import { PixelBuffer, hex, sprite, type RGBA } from '../engine/pixels';
 import { Rng } from '../engine/rng';
 import { VW, VH, SW, SH } from '../engine/stage';
 import { C } from '../art/palette';
-import { GRECIA, SPRIG, type DirSprites } from '../art/sprites';
+import { GRECIA, GRECIA_SEATED, HIM_SEATED, SPRIG, type DirSprites } from '../art/sprites';
 import { ACTION, type Input } from '../engine/input';
 
-export const WORLD_W = 1280;
+export const WORLD_W = 1440;
 const HORIZON = 150;
+// De día junto al árbol; al caminar a la derecha cae la noche.
+const NIGHT_FROM = 340, NIGHT_TO = 660;
+const nightAt = (x: number) => { const t = Math.min(1, Math.max(0, (x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM))); return t * t * (3 - 2 * t); };
+// La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
+const STREET = { x0: 600, wallX0: 612, wallX1: 986, x1: 1046, wallTop: 92, door: 878, window: 920 };
+const BENCH = { x: 1190, baseY: 165 };
 const PAR_FAR = 0.2, PAR_MID = 0.45;
 const FAR_W = Math.ceil(VW + PAR_FAR * (WORLD_W - VW));
 const MID_W = Math.ceil(VW + PAR_MID * (WORLD_W - VW));
@@ -36,7 +42,10 @@ interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; c
 // Mariposa, pájaro o pétalo que sale de un arbusto (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type Facing = 'up' | 'down' | 'left' | 'right';
-interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number }
+interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number; sitting: boolean }
+// Luz nocturna (mundo): farol o ventana; brilla según lo oscuro que esté ahí.
+interface Light { x: number; y: number; r: number; col: string; a: number }
+interface Star { x: number; y: number; ph: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
 
 const PETAL_COLS = [C.lilac, C.lilacLight, C.lilacMid, C.lilacPale];
@@ -44,7 +53,10 @@ const PETAL_COLS = [C.lilac, C.lilacLight, C.lilacMid, C.lilacPale];
 export class TitleScene {
   // Capas estáticas (de atrás hacia adelante).
   private readonly sky: HTMLCanvasElement;      // pantalla, no se mueve
+  private readonly skyDusk: HTMLCanvasElement;
+  private readonly skyNight: HTMLCanvasElement;
   private readonly far: HTMLCanvasElement;      // ciudad en la neblina (parallax 0.2)
+  private readonly farNight: HTMLCanvasElement; // la misma ciudad con ventanas encendidas
   private readonly mid: HTMLCanvasElement;      // árboles lejanos (parallax 0.45)
   private readonly world: HTMLCanvasElement;    // suelo, paseo y copas (1:1)
   private readonly menuBack: HTMLCanvasElement; // composición del menú con ventana de enfoque
@@ -56,10 +68,13 @@ export class TitleScene {
   private readonly sprites: Record<Facing, DirCanvases>;
   private readonly girlShadow: HTMLCanvasElement;
   private readonly marker: HTMLCanvasElement;
+  private readonly seated: HTMLCanvasElement;
+  private readonly lights: Light[] = [];
+  private readonly stars: Star[] = [];
   readonly icon: HTMLCanvasElement;
 
   private readonly props: Prop[] = [];
-  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0 };
+  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false };
   private camX = 0;
   private mode: 'menu' | 'game' = 'menu';
   private focus = 1;      // 1 = menú (enfoque + niebla) · 0 = juego (todo nítido)
@@ -85,12 +100,24 @@ export class TitleScene {
 
     // ── Capas ──
     const sky = new PixelBuffer(VW, VH);
-    paintSky(sky);
+    paintSky(sky, [C.skyTop, C.skyMid, C.skyLow, C.skyHorizon]);
     this.sky = sky.toCanvas();
+    const dusk = new PixelBuffer(VW, VH);
+    paintSky(dusk, [C.duskTop, C.duskMid, C.duskLow, C.duskHorizon]);
+    this.skyDusk = dusk.toCanvas();
+    const night = new PixelBuffer(VW, VH);
+    paintSky(night, [C.nightTop, C.nightMid, C.nightLow, C.nightHorizon]);
+    paintNightSky(night, rng);
+    this.skyNight = night.toCanvas();
+    for (let i = 0; i < 14; i++) this.stars.push({ x: rng.int(VW), y: rng.int(90), ph: rng.range(0, 6.28) });
 
+    const citySeed = rng.int(1e9);
     const far = new PixelBuffer(FAR_W, VH);
-    paintCity(far, rng, FAR_W);
+    paintCity(far, new Rng(citySeed), FAR_W, false);
     this.far = far.toCanvas();
+    const farN = new PixelBuffer(FAR_W, VH);
+    paintCity(farN, new Rng(citySeed), FAR_W, true);
+    this.farNight = farN.toCanvas();
 
     const mid = new PixelBuffer(MID_W, VH);
     paintDistantTrees(mid, rng, MID_W);
@@ -98,19 +125,31 @@ export class TitleScene {
 
     const world = new PixelBuffer(WORLD_W, VH);
     paintGround(world, rng);
+    paintStreet(world, rng);
     paintCanopyAt(world, rng, dew, 160, 40, 200, 82, 1);
-    paintCanopyAt(world, rng, dew, 640, 66, 78, 50, 0.7);
-    paintCanopyAt(world, rng, dew, 1090, 64, 68, 46, 0.62);
+    paintCanopyAt(world, rng, dew, 500, 70, 66, 44, 0.62);
+    paintCanopyAt(world, rng, dew, 1100, 64, 72, 48, 0.66);
+    // Luz de los faroles sobre el suelo, ya horneada (la noche no cambia).
+    for (const lx of LAMPS) {
+      const n = nightAt(lx);
+      if (n > 0.05) world.ellipse(lx, 172, 26, 7, [255, 225, 160, Math.round(70 * n)]);
+    }
     this.world = world.toCanvas();
 
     // ── Objetos ──
     this.addTrunk(rng, MAIN_TREE.x, MAIN_TREE.base, MAIN_TREE.top, 8, [[[-2, 104], [112, 66]], [[-1, 100], [156, 44]], [[2, 104], [231, 62]], [[3, 110], [248, 104]]], 10);
-    this.addTrunk(rng, 640, 152, 106, 5, [[[-1, 112], [600, 84]], [[0, 108], [646, 74]], [[2, 112], [688, 88]]], 7);
-    this.addTrunk(rng, 1090, 153, 110, 4.5, [[[-1, 116], [1058, 90]], [[1, 112], [1096, 80]], [[2, 116], [1124, 94]]], 6);
-    // Faroles y banca al borde del pasto, sin estorbar la vereda.
-    for (const [x, baseY] of [[420, 164], [800, 164], [1180, 164]] as Pt[]) this.addProp('lamp', renderLamp(), x, baseY, 3, { hw: 2, depth: 3 });
-    this.addProp('bench', renderBench(), 540, 165, 12, { hw: 11, depth: 3 });
-    this.addProp('gate', renderGate(rng), 1256, 160, 16, { hw: 15, depth: 4 });
+    this.addTrunk(rng, 500, 153, 112, 4.5, [[[-1, 118], [470, 94]], [[1, 114], [506, 86]], [[2, 118], [532, 98]]], 6);
+    this.addTrunk(rng, 1100, 153, 108, 5, [[[-1, 114], [1064, 88]], [[0, 110], [1106, 78]], [[2, 114], [1138, 92]]], 7);
+    // Faroles al borde del pasto, sin estorbar la vereda. De noche, encendidos.
+    for (const x of LAMPS) {
+      this.addProp('lamp', renderLamp(nightAt(x)), x, 164, 3, { hw: 2, depth: 3 });
+      this.lights.push({ x, y: 164 - 39, r: 12, col: '255,225,160', a: 0.5 * nightAt(x) });
+    }
+    this.lights.push({ x: STREET.window + 11, y: STREET.wallTop + 22, r: 9, col: '255,220,150', a: 0.42 });
+    // La banca grande, con él sentado mirando hacia donde llegará ella.
+    this.addProp('bench', renderBench(HIM_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
+    this.addProp('gate', renderGate(rng), 1412, 160, 16, { hw: 15, depth: 4 });
+    this.seated = GRECIA_SEATED.toCanvas();
     for (const [cx, baseY, r] of bushSpots(rng, this.props)) {
       const v = rng.next();
       this.addProp('bush', renderBush(rng, r).toCanvas(), cx, baseY, r, undefined, v < 0.42 ? 'none' : v < 0.74 ? 'butterflies' : 'birds');
@@ -245,6 +284,12 @@ export class TitleScene {
   private movePlayer(dt: number, input: Input): void {
     const p = this.player;
     const [ax, ay] = input.axis;
+    if (p.sitting) {
+      // Cualquier flecha la levanta de la banca.
+      if (ax === 0 && ay === 0) return;
+      p.sitting = false;
+      p.y = BENCH.baseY + 4 - GIRL_H + 1;
+    }
     p.moving = ax !== 0 || ay !== 0;
     if (!p.moving) { p.walkT = 0; return; }
     p.walkT += dt;
@@ -260,17 +305,26 @@ export class TitleScene {
     const fx = this.player.x + GIRL_W / 2, fy = this.player.y + GIRL_H - 1;
     let best: Prop | null = null, bestD = Infinity;
     for (const pr of this.props) {
-      if (pr.kind !== 'bush') continue;
+      if (pr.kind !== 'bush' && pr.kind !== 'bench') continue;
       const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
-      if (dx > pr.r + 9 || dy > 12) continue;
-      const d = dx + dy * 2;
+      if (dx > pr.r + 9 || dy > 14) continue;
+      // La banca tiene prioridad sobre los arbustos de alrededor.
+      const d = dx + dy * 2 - (pr.kind === 'bench' ? 100 : 0);
       if (d < bestD) { bestD = d; best = pr; }
     }
     return best;
   }
 
+  // J junto a la banca: Grecia se sienta a su lado y se miran.
+  private sit(): void {
+    const p = this.player;
+    p.sitting = true; p.moving = false; p.walkT = 0; p.facing = 'right';
+    p.x = BENCH.x - 22 + 8; p.y = BENCH.baseY - 25;
+  }
+
   // J sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
   private poke(pr: Prop): void {
+    if (pr.kind === 'bench') { this.sit(); return; }
     pr.shake = 0.5;
     const r = this.rng;
     const top = pr.baseY - pr.r * 2;
@@ -371,9 +425,19 @@ export class TitleScene {
   // Compone cielo, parallax, suelo y objetos (con Grecia opcional) según la cámara.
   private compose(ctx: CanvasRenderingContext2D, withPlayer: boolean): void {
     const cam = Math.round(this.camX);
+    const n = nightAt(this.camX + VW / 2);
     ctx.clearRect(0, 0, VW, VH);
     ctx.drawImage(this.sky, 0, 0);
-    ctx.drawImage(this.far, -Math.round(this.camX * PAR_FAR), 0);
+    if (n > 0) {
+      ctx.globalAlpha = Math.min(1, 2.4 * n * (1 - n));
+      ctx.drawImage(this.skyDusk, 0, 0);
+      ctx.globalAlpha = n * n;
+      ctx.drawImage(this.skyNight, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+    const farX = -Math.round(this.camX * PAR_FAR);
+    ctx.drawImage(this.far, farX, 0);
+    if (n > 0) { ctx.globalAlpha = n; ctx.drawImage(this.farNight, farX, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.mid, -Math.round(this.camX * PAR_MID), 0);
     ctx.drawImage(this.world, -cam, 0);
 
@@ -387,9 +451,13 @@ export class TitleScene {
     }
     if (withPlayer) {
       const p = this.player;
-      const { img, bob } = this.girlFrame();
-      const gx = Math.round(p.x) - cam, gy = Math.round(p.y) + bob;
-      items.push({ baseY: p.y + GIRL_H - 1, draw: () => { ctx.drawImage(this.girlShadow, gx, gy - bob + GIRL_H - 2); ctx.drawImage(img, gx, gy); } });
+      if (p.sitting) {
+        items.push({ baseY: BENCH.baseY + 0.5, draw: () => ctx.drawImage(this.seated, Math.round(p.x) - cam, Math.round(p.y)) });
+      } else {
+        const { img, bob } = this.girlFrame();
+        const gx = Math.round(p.x) - cam, gy = Math.round(p.y) + bob;
+        items.push({ baseY: p.y + GIRL_H - 1, draw: () => { ctx.drawImage(this.girlShadow, gx, gy - bob + GIRL_H - 2); ctx.drawImage(img, gx, gy); } });
+      }
     }
     items.sort((a, b) => a.baseY - b.baseY);
     for (const it of items) it.draw();
@@ -426,7 +494,7 @@ export class TitleScene {
       crisp.globalAlpha = 1;
     }
 
-    if (this.nearProp && this.mode === 'game') {
+    if (this.nearProp && this.mode === 'game' && !this.player.sitting) {
       const m = this.nearProp;
       crisp.drawImage(this.marker, m.cx - cam - 4, m.baseY - m.r * 2 - 14 + Math.round(Math.sin(this.t * 4) * 1.2));
     }
@@ -485,10 +553,41 @@ export class TitleScene {
       if (f.near || this.gameT < f.delay) continue;
       crisp.drawImage(f.img, Math.round(f.x - f.img.width / 2), Math.round(f.y - f.img.height / 2));
     }
+    // Estrellas que parpadean cuando ya es de noche.
+    const night = nightAt(this.camX + VW / 2);
+    if (night > 0.3) {
+      for (const st of this.stars) {
+        const a = (0.4 + 0.6 * (0.5 + 0.5 * Math.sin(this.t * 1.7 + st.ph))) * (night - 0.3) / 0.7;
+        crisp.fillStyle = `rgba(255,248,230,${a.toFixed(3)})`;
+        crisp.fillRect(st.x, st.y, 1, 1);
+      }
+    }
+    crisp.globalAlpha = 1 - night * 0.8;
     crisp.drawImage(this.overlay, 0, 0);
+    crisp.globalAlpha = 1;
 
     // Capa de niebla: flores fuera de foco, bancos de bruma y rayos de sol.
     haze.clearRect(0, 0, SW, SH);
+    // La noche cae de izquierda a derecha según la posición en el mundo.
+    if (nightAt(this.camX + VW) > 0) {
+      const g = haze.createLinearGradient((NIGHT_FROM - cam) / 4, 0, (NIGHT_TO - cam) / 4, 0);
+      g.addColorStop(0, 'rgba(26,22,66,0)');
+      g.addColorStop(1, 'rgba(26,22,66,0.5)');
+      haze.fillStyle = g;
+      haze.fillRect(0, 0, SW, SH);
+    }
+    // Faroles y ventana encendidos.
+    for (const l of this.lights) {
+      if (l.a <= 0.02) continue;
+      const sx = (l.x - cam) / 4, sy = l.y / 4, r = l.r / 4 + 1;
+      if (sx < -r || sx > SW + r) continue;
+      const g = haze.createRadialGradient(sx, sy, 0, sx, sy, r * 3);
+      g.addColorStop(0, `rgba(${l.col},${l.a.toFixed(3)})`);
+      g.addColorStop(0.4, `rgba(${l.col},${(l.a * 0.35).toFixed(3)})`);
+      g.addColorStop(1, `rgba(${l.col},0)`);
+      haze.fillStyle = g;
+      haze.fillRect(sx - r * 3, sy - r * 3, r * 6, r * 6);
+    }
     if (this.frontAlpha > 0) {
       haze.globalAlpha = this.frontAlpha;
       haze.drawImage(this.frontSoft, 0, 0);
@@ -499,7 +598,7 @@ export class TitleScene {
       const w = f.img.width * 0.45, h = f.img.height * 0.45;
       haze.drawImage(f.img, f.x / 4 - w / 2, f.y / 4 - h / 2, w, h);
     }
-    const fogK = 0.4 + 0.6 * this.focus;
+    const fogK = (0.4 + 0.6 * this.focus) * (1 - 0.7 * night);
     for (const f of this.fog) {
       const g = haze.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.rx);
       g.addColorStop(0, `rgba(252,250,255,${(f.a * fogK).toFixed(3)})`);
@@ -513,10 +612,12 @@ export class TitleScene {
       haze.restore();
     }
     const pulse = 0.5 + 0.5 * Math.sin(this.t * 0.35);
+    haze.globalAlpha = 1 - night;
     haze.fillStyle = `rgba(255,246,200,${(0.08 + 0.05 * pulse).toFixed(3)})`;
     haze.beginPath(); haze.moveTo(-4, -2); haze.lineTo(14, -2); haze.lineTo(56, 45); haze.lineTo(30, 45); haze.closePath(); haze.fill();
     haze.fillStyle = `rgba(255,246,200,${(0.06 + 0.05 * (1 - pulse)).toFixed(3)})`;
     haze.beginPath(); haze.moveTo(18, -2); haze.lineTo(26, -2); haze.lineTo(70, 45); haze.lineTo(58, 45); haze.closePath(); haze.fill();
+    haze.globalAlpha = 1;
   }
 }
 
@@ -529,15 +630,18 @@ function drawButterfly(ctx: CanvasRenderingContext2D, x: number, y: number, open
 
 // Mezcla un color hacia la bruma: k = 0 cerca … 1 muy lejos.
 function fogged(c: string, k: number): RGBA {
-  const a = hex(c), f = hex(C.mist);
+  return mix(c, C.mist, k);
+}
+function mix(c1: string, c2: string, k: number): RGBA {
+  const a = hex(c1), f = hex(c2);
   return [a[0] + (f[0] - a[0]) * k, a[1] + (f[1] - a[1]) * k, a[2] + (f[2] - a[2]) * k, 255];
 }
 
 // ───────────────────────── fondo ─────────────────────────
 
 // Degradado vertical con tramado fino: cielo pixel art sin bandas duras.
-function paintSky(pb: PixelBuffer): void {
-  const base = [C.skyTop, C.skyMid, C.skyLow, C.skyHorizon].map((c) => hex(c));
+function paintSky(pb: PixelBuffer, colors: readonly string[]): void {
+  const base = colors.map((c) => hex(c));
   const stops: RGBA[] = [];
   for (let i = 0; i < base.length - 1; i++) {
     for (let j = 0; j < 4; j++) {
@@ -556,9 +660,20 @@ function paintSky(pb: PixelBuffer): void {
   }
 }
 
+// Luna y estrellas fijas sobre el cielo nocturno.
+function paintNightSky(pb: PixelBuffer, rng: Rng): void {
+  for (let i = 0; i < 70; i++) {
+    const x = rng.int(VW), y = rng.int(100);
+    pb.set(x, y, hex(C.star, 120 + rng.int(120)));
+  }
+  pb.circle(268, 28, 9, hex('#f6f1e3'));
+  pb.circle(264, 26, 8, hex(C.nightTop));
+  pb.circle(264, 26, 8, hex(C.nightMid, 200));
+}
+
 // Ciudad al fondo, casi disuelta en la neblina: dos filas de edificios;
-// la de atrás más alta y más tenue. La bruma es más densa cerca del suelo.
-function paintCity(pb: PixelBuffer, rng: Rng, width: number): void {
+// la de atrás más alta y más tenue. De noche, siluetas con ventanas encendidas.
+function paintCity(pb: PixelBuffer, rng: Rng, width: number, night: boolean): void {
   const rows: [number, number, number, number][] = [[0.9, 26, 70, 0.02], [0.82, 14, 44, 0.05]];
   for (const [k0, hMin, hMax, win] of rows) {
     let x = -8 + rng.int(6);
@@ -568,14 +683,14 @@ function paintCity(pb: PixelBuffer, rng: Rng, width: number): void {
       const tone = rng.pick([C.lilacDeep, C.canopyShade, C.trunkDark]);
       for (let y = top; y < HORIZON; y++) {
         const k = Math.min(0.96, k0 + ((y - top) / h) * 0.09);
-        pb.hline(x, x + w - 1, y, fogged(tone, k));
+        pb.hline(x, x + w - 1, y, night ? mix(C.nightMid, C.nightHorizon, k * 0.8) : fogged(tone, k));
         if (y > top + 2 && (y - top) % 3 === 0) {
           for (let wx = x + 2; wx < x + w - 1; wx += 3) {
-            if (rng.next() < win * 8) pb.set(wx, y, fogged(C.lilacDeep, k - 0.06));
+            if (rng.next() < win * 8) pb.set(wx, y, night ? hex(C.windowLight, 90 + Math.round(120 * (1 - k))) : fogged(C.lilacDeep, k - 0.06));
           }
         }
       }
-      pb.hline(x, x + w - 1, top, fogged(C.lilacLight, k0 - 0.05));
+      pb.hline(x, x + w - 1, top, night ? mix(C.nightLow, C.nightHorizon, k0) : fogged(C.lilacLight, k0 - 0.05));
       if (rng.next() < 0.3) pb.rect(x + 1 + rng.int(Math.max(1, w - 2)), top - 2 - rng.int(4), 1, 4, fogged(tone, k0));
       x += w + rng.int(3);
     }
@@ -628,10 +743,72 @@ function paintGround(pb: PixelBuffer, rng: Rng): void {
     const col = fogged(rng.pick([C.leaf, C.leafLight, C.groundLight]), 0.3);
     pb.set(x, y, col); pb.set(x + 2, y, col); pb.set(x + 1, y + 1, col);
   }
-  for (const [tx, n] of [[160, 60], [640, 30], [1090, 26]] as Pt[]) {
+  for (const [tx, n] of [[160, 60], [500, 24], [1100, 26]] as Pt[]) {
     for (let i = 0; i < n; i++) pb.set(tx + Math.round(rng.range(-90, 90)), HORIZON + rng.int(VH - HORIZON), hex(rng.pick(PETAL_COLS)));
   }
 }
+
+// La esquina verde: pavimento, pared verde con la puerta y la ventana de su
+// casa, y la calle que dobla en la esquina.
+function paintStreet(pb: PixelBuffer, rng: Rng): void {
+  const { x0, x1, wallX0, wallX1, wallTop, door, window } = STREET;
+  // Pavimento de baldosas entre la pared y la vereda.
+  for (let y = HORIZON; y < 167; y++) {
+    for (let x = x0; x < x1; x++) {
+      const seam = (y - HORIZON) % 5 === 4 || ((x + ((y - HORIZON) / 5 | 0) * 4) % 9 === 8);
+      pb.set(x, y, hex(seam ? C.pavementSeam : C.pavement));
+    }
+  }
+  // Pared: cornisa clara, zócalo oscuro y juntas de ladrillo apenas marcadas.
+  for (let y = wallTop; y < HORIZON; y++) {
+    const col = y < wallTop + 3 ? C.wallLight : y >= HORIZON - 5 ? C.skirting : y > HORIZON - 14 ? C.wallDark : C.wall;
+    pb.hline(wallX0, wallX1 - 1, y, hex(col));
+    if (y > wallTop + 4 && y < HORIZON - 6 && (y - wallTop) % 6 === 0) {
+      for (let x = wallX0 + ((y / 6 | 0) % 2) * 7; x < wallX1; x += 14) pb.set(x, y, hex(C.wallDark));
+    }
+  }
+  for (let i = 0; i < 90; i++) pb.set(wallX0 + rng.int(wallX1 - wallX0), wallTop + 4 + rng.int(HORIZON - wallTop - 10), hex(rng.next() < 0.5 ? C.wallDark : C.wallLight, 90));
+  // Enredadera en un tramo de la pared.
+  for (let i = 0; i < 60; i++) {
+    const x = wallX0 + 20 + rng.int(60), y = wallTop + 3 + rng.int(40);
+    if (rng.next() < 0.4 + (y - wallTop) / 100) { pb.set(x, y, hex(rng.pick([C.leafDark, C.leaf]))); pb.set(x + 1, y, hex(C.leafDark)); }
+  }
+  // Lado de la esquina (la pared dobla hacia el fondo) y la calle que entra.
+  pb.rect(wallX1, wallTop + 2, 6, HORIZON - wallTop - 2, hex(C.wallSide));
+  pb.rect(wallX1, wallTop + 2, 6, 2, hex(C.wallDark));
+  pb.poly([[wallX1 + 8, wallTop + 44], [wallX1 + 22, wallTop + 44], [x1, HORIZON + 6], [wallX1 + 6, HORIZON + 6]], hex(C.asphalt));
+  pb.poly([[wallX1 + 6, HORIZON + 6], [x1, HORIZON + 6], [x1, HORIZON + 8], [wallX1 + 6, HORIZON + 8]], hex(C.curb));
+  for (let t = 0; t < 1; t += 0.12) {
+    const y = wallTop + 46 + t * (HORIZON - wallTop - 40), x = wallX1 + 15 + t * ((x1 - wallX1) / 2 - 15);
+    pb.rect(Math.round(x), Math.round(y), 1, 2, hex(C.curb, 160));
+  }
+  // La puerta de su casa.
+  pb.rect(door - 1, HORIZON - 36, 20, 36, hex(C.outline));
+  pb.rect(door, HORIZON - 35, 18, 35, hex(C.door));
+  pb.rect(door + 8, HORIZON - 35, 1, 35, hex(C.doorDark));
+  pb.rect(door + 2, HORIZON - 31, 5, 12, hex(C.doorDark)); pb.rect(door + 11, HORIZON - 31, 5, 12, hex(C.doorDark));
+  pb.rect(door + 2, HORIZON - 16, 5, 12, hex(C.doorDark)); pb.rect(door + 11, HORIZON - 16, 5, 12, hex(C.doorDark));
+  pb.set(door + 6, HORIZON - 18, hex(C.lampLight)); pb.set(door + 6, HORIZON - 17, hex(C.flowerCenter));
+  pb.rect(door - 3, HORIZON - 39, 24, 3, hex(C.wallDark)); // dintel
+  pb.rect(door - 2, HORIZON, 22, 2, hex(C.pavementSeam)); // escalón
+  // La ventana encendida, con cortina.
+  pb.rect(window - 1, wallTop + 11, 24, 24, hex(C.windowFrame));
+  pb.rect(window, wallTop + 12, 22, 22, hex(C.windowLight));
+  pb.rect(window + 10, wallTop + 12, 2, 22, hex(C.windowFrame));
+  pb.rect(window, wallTop + 22, 22, 2, hex(C.windowFrame));
+  for (let y = wallTop + 12; y < wallTop + 34; y++) { pb.set(window + 1 + (y & 1), y, hex(C.lilacLight)); pb.set(window + 20 - (y & 1), y, hex(C.lilacLight)); }
+  pb.rect(window - 2, wallTop + 35, 26, 2, hex(C.wallDark)); // alféizar
+  for (let i = 0; i < 5; i++) floret(pb, window + 2 + i * 5, wallTop + 34, 1, 0.05, rng.range(0.4, 1), rng); // macetero
+  // Macetas junto a la puerta.
+  for (const px of [door - 12, door + 26]) {
+    pb.rect(px, HORIZON - 6, 6, 6, hex('#a7674f')); pb.rect(px + 1, HORIZON - 6, 4, 1, hex('#c28667'));
+    for (let i = 0; i < 8; i++) pb.set(px + 1 + rng.int(4), HORIZON - 9 + rng.int(4), hex(rng.pick([C.leaf, C.leafDark, C.leafLight])));
+  }
+  // Buzón.
+  pb.rect(door - 24, HORIZON - 22, 6, 8, hex('#7a6b8f')); pb.rect(door - 24, HORIZON - 22, 6, 2, hex('#9a8bb0')); pb.rect(door - 22, HORIZON - 14, 2, 14, hex(C.outline));
+}
+
+const LAMPS = [420, 655, 955, 1270];
 
 // ───────────────────────── árboles ─────────────────────────
 
@@ -749,9 +926,11 @@ function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
     [16, 176, 11], [52, 163, 9], [86, 173, 10], [30, 156, 7], [122, 156, 7],
     [196, 175, 11], [232, 161, 9], [268, 177, 12], [300, 159, 8], [250, 153, 7], [178, 178, 8],
   ];
-  for (let x = 350; x < 1225; x += 46 + rng.int(34)) {
+  for (let x = 350; x < 1385; x += 46 + rng.int(34)) {
     const r = 7 + rng.int(6);
     const baseY = 153 + rng.int(26);
+    if (x > STREET.x0 - 20 && x < STREET.x1 + 16) continue; // la esquina verde es pavimento
+    if (Math.abs(x - BENCH.x) < 52) continue; // espacio libre alrededor de la banca
     if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
     spots.push([x, baseY, r]);
   }
@@ -793,27 +972,34 @@ function renderBush(rng: Rng, r: number): PixelBuffer {
   return pb;
 }
 
-// Farol de parque: poste fino con lámpara crema.
-function renderLamp(): HTMLCanvasElement {
+// Farol de parque: poste fino con lámpara. `lit` 0..1 = qué tan encendido está.
+function renderLamp(lit: number): HTMLCanvasElement {
   const pb = new PixelBuffer(9, 44);
   pb.ellipse(4, 42, 4, 1, hex(C.shadow, 60));
   pb.rect(1, 39, 7, 2, hex(C.trunkDark)); pb.rect(2, 38, 5, 1, hex(C.trunkDark));
   pb.rect(3, 8, 3, 31, hex(C.trunkDark)); pb.rect(3, 8, 1, 31, hex(C.trunk));
   pb.rect(2, 1, 5, 1, hex(C.trunkDark)); pb.rect(3, 0, 3, 1, hex(C.trunkDark));
-  pb.rect(1, 2, 7, 6, hex(C.trunkDark)); pb.rect(2, 3, 5, 4, hex('#fff1c2')); pb.rect(3, 4, 2, 2, hex('#fffaf0'));
+  pb.rect(1, 2, 7, 6, hex(C.trunkDark));
+  pb.rect(2, 3, 5, 4, mix('#e8e0d0', C.lampLight, lit));
+  pb.rect(3, 4, 2, 2, mix('#f4efe6', '#fffaf0', lit));
+  if (lit > 0.5) { pb.rect(2, 3, 5, 4, hex('#fff6d6')); pb.rect(3, 4, 3, 2, hex('#ffffff')); }
   return pb.toCanvas();
 }
 
-// Banca de madera.
-function renderBench(): HTMLCanvasElement {
-  const pb = new PixelBuffer(26, 15);
-  pb.ellipse(13, 13, 12, 1, hex(C.shadow, 60));
+// Banca grande de madera, con él sentado en el lado derecho, mirando a la izquierda.
+function renderBench(him: PixelBuffer): HTMLCanvasElement {
+  const pb = new PixelBuffer(48, 33);
+  pb.ellipse(24, 31, 23, 1, hex(C.shadow, 60));
   const light = hex('#b58f68'), wood = hex('#95724f'), dark = hex('#5f4a3c');
-  pb.rect(1, 0, 24, 2, light); pb.rect(1, 3, 24, 2, wood);
-  pb.rect(2, 2, 2, 1, dark); pb.rect(22, 2, 2, 1, dark);
-  pb.rect(0, 6, 26, 3, light); pb.rect(0, 8, 26, 1, wood);
-  pb.rect(2, 9, 2, 4, dark); pb.rect(22, 9, 2, 4, dark);
-  pb.rect(3, 5, 1, 1, dark); pb.rect(22, 5, 1, 1, dark);
+  // Respaldo: tres tablas.
+  pb.rect(3, 6, 42, 2, light); pb.rect(3, 9, 42, 2, wood); pb.rect(3, 12, 42, 2, light);
+  pb.rect(4, 8, 2, 1, dark); pb.rect(42, 8, 2, 1, dark); pb.rect(4, 11, 2, 1, dark); pb.rect(42, 11, 2, 1, dark);
+  pb.rect(4, 14, 2, 6, dark); pb.rect(42, 14, 2, 6, dark); // montantes
+  // Asiento y patas.
+  pb.rect(2, 20, 44, 3, light); pb.rect(2, 23, 44, 1, wood);
+  pb.rect(4, 24, 3, 7, dark); pb.rect(41, 24, 3, 7, dark);
+  pb.rect(4, 26, 40, 1, dark);
+  pb.blit(him, 27, 5);
   return pb.toCanvas();
 }
 

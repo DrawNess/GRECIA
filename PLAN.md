@@ -33,14 +33,23 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 | 5 | Diseño de niveles: escenas y recuerdos (material del autor) | pendiente |
 | 6 | Final y pulido: carta con máquina de escribir, música opcional, QA en PC débil, QR impreso | pendiente |
 
-## Mundo (etapa 1)
+## Mundo (etapa 1) — el paseo como recuerdo
 
-- 4 pantallas (1280 px). Vereda continua abajo; senda curva al árbol grande.
-- Tramo 1: árbol grande, arbustos. Tramo 2: farol, banca, segundo árbol.
-  Tramo 3: farol, arbustos. Tramo 4: tercer árbol, farol y una puerta de
-  jardín cerrada como meta (placeholder hasta definir las estaciones).
-- Grecia rodea el tronco por la vereda; faroles y banca están al borde del
-  pasto para no estorbar el paso.
+- 1440 px (4½ pantallas). Vereda continua abajo; senda curva al árbol grande.
+- **Día → noche** al caminar a la derecha (x 340–660): el cielo pasa por el
+  atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
+  faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
+- Tramo 1 (día): el árbol grande, arbustos.
+- Tramo 2 (atardecer): farol, segundo árbol.
+- Tramo 3 (noche, x 600–1046): **la esquina verde** — la pared verde de su
+  casa a la entrada de la calle, donde más tiempo pasaban y hasta donde él la
+  acompañaba: pavimento, puerta de madera, ventana encendida con cortinas,
+  buzón, macetas, farol, y la calle que dobla en la esquina.
+- Tramo 4 (noche): tercer árbol, farol y **la banca grande con él sentado**
+  (un poco más alto que ella). Con J junto a la banca, Grecia se sienta a su
+  lado y quedan mirándose; cualquier flecha la levanta.
+- Puerta de jardín cerrada al final (meta, placeholder).
+- Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.
 
 ## Menú (etapa 0)
 

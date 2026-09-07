@@ -137,6 +137,72 @@ export const GRECIA: { back: DirSprites; front: DirSprites; side: DirSprites } =
 };
 export const GRECIA_FRAMES = GRECIA.back.idle;
 
+// Grecia sentada mirando a la derecha (en la banca, hacia él).
+const GRECIA_SIT = [
+  '....OOOO....',
+  '...OhhhhO...',
+  '..OhHHHHhO..',
+  '..OHHHHSSO..',
+  '..OHHHSSSO..',
+  '..OHHHSOSO..',
+  '..OkHHSSSO..',
+  '..OkkHSSsO..',
+  '..OkOWWWO...',
+  '..ORODDDDO..',
+  '..OrODDDDO..',
+  '...ODDDDDO..',
+  '...ODDDdDO..',
+  '...ODDSSDO..',
+  '...ODDSSDO..',
+  '...ODDDDDDO.',
+  '..ODDDDDDDDO',
+  '..OddDDDdddO',
+  '..OOOOOOSSO.',
+  '........OSSO',
+  '........OSSO',
+  '........OSSO',
+  '........OSSO',
+  '........OSSO',
+  '........OBBO',
+  '........OOOO',
+];
+export const GRECIA_SEATED = mk(GRECIA_SIT);
+
+// Él, sentado mirando a la izquierda (hacia ella). Un poco más alto que Grecia.
+const HIM_PAL = {
+  O: C.outline, k: C.himHair, S: C.skin, s: C.skinShade,
+  J: C.himJacket, j: C.himJacketShade, W: C.himShirt, P: C.himPants, B: C.himShoe,
+};
+const HIM_SIT = [
+  '....OOOO....',
+  '...OkkkkO...',
+  '..OkkkkkkO..',
+  '..OSSkkkkO..',
+  '..OSSSkkkO..',
+  '..OSOSkkkO..',
+  '..OSSSkkkO..',
+  '..OsSSkkkO..',
+  '...OSSOO....',
+  '..OJJJJJJO..',
+  '.OJJJWJJJJO.',
+  '.OJJJWJJJJO.',
+  '.OJjJWJJjJO.',
+  '.OJjJJJJjJO.',
+  '.OSjJJJJjJO.',
+  '.OPPPPjJJJO.',
+  'OPPPPPPPPPO.',
+  'OPPOOOOOOO..',
+  'OPPO........',
+  'OPPO........',
+  'OPPO........',
+  'OPPO........',
+  'OPPO........',
+  'OBBBO.......',
+  'OBBBO.......',
+  'OOOOO.......',
+];
+export const HIM_SEATED = sprite(HIM_SIT, HIM_PAL);
+
 // Ramita de lila (ícono del menú y favicon).
 export const SPRIG = sprite(
   [
