@@ -184,7 +184,11 @@ Una sola vez:
 Repo real: `DrawNess/GRECIA` → `https://drawness.github.io/GRECIA/`.
 
 Notas:
-- El repo es público (Pages gratis lo exige). Por eso el nombre de ella no
+- El repo debe ser **público**: con repo privado, la página de Pages pide
+  pagar GitHub Pro. Para cambiarlo: Settings → Danger Zone → Change
+  repository visibility → Make public. (Si se quiere privado sí o sí, usar
+  Cloudflare Pages: Workers & Pages → Create → Pages → Connect to Git,
+  build `pnpm build`, output `dist`; gratis y sin cambios en el código.) Por eso el nombre de ella no
   está en texto plano (solo su hash) y la carta final irá cifrada.
 - `vite.config.ts` usa `base: './'`, así que funciona en cualquier ruta.
 - Alternativas si algún día se quiere repo privado: Cloudflare Pages o
