@@ -19,5 +19,5 @@ export const gate = {
   msgWrongDate: 'Esa no es la fecha…',
 
   enterHint: 'Enter ↵ para continuar',
-  moveHint: 'Flechas ← ↑ ↓ → para caminar',
+  moveHint: 'Flechas para caminar · J para mirar de cerca',
 };

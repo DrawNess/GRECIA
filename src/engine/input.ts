@@ -1,12 +1,12 @@
-// Teclado: flechas / WASD para mover. Z, Espacio y Enter = acción; X y Esc = cancelar.
+// Teclado: flechas / WASD para mover. J (también Espacio y Enter) = acción; K y Esc = cancelar.
 const MOVE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], KeyA: [-1, 0],
   ArrowRight: [1, 0], KeyD: [1, 0],
   ArrowUp: [0, -1], KeyW: [0, -1],
   ArrowDown: [0, 1], KeyS: [0, 1],
 };
-export const ACTION = new Set(['KeyZ', 'Space', 'Enter']);
-export const CANCEL = new Set(['KeyX', 'Escape']);
+export const ACTION = new Set(['KeyJ', 'Space', 'Enter']);
+export const CANCEL = new Set(['KeyK', 'Escape']);
 
 export class Input {
   private readonly down = new Set<string>();

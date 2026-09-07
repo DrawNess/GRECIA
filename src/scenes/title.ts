@@ -227,7 +227,7 @@ export class TitleScene {
     return best;
   }
 
-  // Z sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
+  // J sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
   private poke(pr: Prop): void {
     pr.shake = 0.5;
     const r = this.rng;
@@ -703,15 +703,15 @@ const BUSHES: [number, number, number][] = [
   [196, 175, 11], [232, 161, 9], [268, 177, 12], [300, 159, 8], [250, 153, 7], [178, 178, 8],
 ];
 
-// Burbuja con la Z que aparece sobre el arbusto cercano.
+// Burbuja con la J que aparece sobre el arbusto cercano.
 const MARKER_ROWS = [
   '.OOOOOOO.',
   'OWWWWWWWO',
   'OWZZZZZWO',
   'OWWWWZWWO',
-  'OWWWZWWWO',
-  'OWWZWWWWO',
-  'OWZZZZZWO',
+  'OWWWWZWWO',
+  'OWZWWZWWO',
+  'OWWZZZWWO',
   'OWWWWWWWO',
   '.OOOOOOO.',
   '....O....',
