@@ -15,7 +15,7 @@ const HORIZON = 150;
 const NIGHT_FROM = 340, NIGHT_TO = 660;
 const nightAt = (x: number) => { const t = Math.min(1, Math.max(0, (x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM))); return t * t * (3 - 2 * t); };
 // La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
-const STREET = { x0: 600, wallX0: 612, wallX1: 986, x1: 1046, wallTop: 92, door: 878, window: 920 };
+const STREET = { x0: 600, wallX0: 612, wallX1: 986, x1: 1046, wallTop: 92, door: 878, pole: 998, booth: 1006 };
 const BENCH = { x: 1190, baseY: 165 };
 const PAR_FAR = 0.2, PAR_MID = 0.45;
 const FAR_W = Math.ceil(VW + PAR_FAR * (WORLD_W - VW));
@@ -70,6 +70,8 @@ export class TitleScene {
   private readonly marker: HTMLCanvasElement;
   private readonly seated: HTMLCanvasElement;
   private readonly lights: Light[] = [];
+  // Luz roja de la cámara de la caseta (parpadea).
+  private readonly cameraLed: Pt = [STREET.booth + 1, 133];
   private readonly stars: Star[] = [];
   readonly icon: HTMLCanvasElement;
 
@@ -145,7 +147,9 @@ export class TitleScene {
       this.addProp('lamp', renderLamp(nightAt(x)), x, 164, 3, { hw: 2, depth: 3 });
       this.lights.push({ x, y: 164 - 39, r: 12, col: '255,225,160', a: 0.5 * nightAt(x) });
     }
-    this.lights.push({ x: STREET.window + 11, y: STREET.wallTop + 22, r: 9, col: '255,220,150', a: 0.42 });
+    // Poste de la calle que entra y ventanita de la caseta.
+    this.lights.push({ x: STREET.pole + 5, y: 120, r: 7, col: '255,225,160', a: 0.45 });
+    this.lights.push({ x: STREET.booth + 6, y: 143, r: 4, col: '255,220,150', a: 0.3 });
     // La banca grande, con él sentado mirando hacia donde llegará ella.
     this.addProp('bench', renderBench(HIM_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
     this.addProp('gate', renderGate(rng), 1412, 160, 16, { hw: 15, depth: 4 });
@@ -524,6 +528,10 @@ export class TitleScene {
       crisp.fillStyle = b.col;
       drawButterfly(crisp, Math.round(b.x) - cam, Math.round(b.y), Math.sin(this.t * 9 + b.ph) > 0);
     }
+    if ((this.t % 1.6) < 0.18) {
+      crisp.fillStyle = '#ff5a5a';
+      crisp.fillRect(this.cameraLed[0] - cam, this.cameraLed[1], 1, 1);
+    }
 
     // Pétalos ambientales (pantalla), racimo del frente y flores al viento.
     for (const p of this.petals) {
@@ -751,7 +759,7 @@ function paintGround(pb: PixelBuffer, rng: Rng): void {
 // La esquina verde: pavimento, pared verde con la puerta y la ventana de su
 // casa, y la calle que dobla en la esquina.
 function paintStreet(pb: PixelBuffer, rng: Rng): void {
-  const { x0, x1, wallX0, wallX1, wallTop, door, window } = STREET;
+  const { x0, x1, wallX0, wallX1, wallTop, door, pole, booth } = STREET;
   // Pavimento de baldosas entre la pared y la vereda.
   for (let y = HORIZON; y < 167; y++) {
     for (let x = x0; x < x1; x++) {
@@ -791,14 +799,21 @@ function paintStreet(pb: PixelBuffer, rng: Rng): void {
   pb.set(door + 6, HORIZON - 18, hex(C.lampLight)); pb.set(door + 6, HORIZON - 17, hex(C.flowerCenter));
   pb.rect(door - 3, HORIZON - 39, 24, 3, hex(C.wallDark)); // dintel
   pb.rect(door - 2, HORIZON, 22, 2, hex(C.pavementSeam)); // escalón
-  // La ventana encendida, con cortina.
-  pb.rect(window - 1, wallTop + 11, 24, 24, hex(C.windowFrame));
-  pb.rect(window, wallTop + 12, 22, 22, hex(C.windowLight));
-  pb.rect(window + 10, wallTop + 12, 2, 22, hex(C.windowFrame));
-  pb.rect(window, wallTop + 22, 22, 2, hex(C.windowFrame));
-  for (let y = wallTop + 12; y < wallTop + 34; y++) { pb.set(window + 1 + (y & 1), y, hex(C.lilacLight)); pb.set(window + 20 - (y & 1), y, hex(C.lilacLight)); }
-  pb.rect(window - 2, wallTop + 35, 26, 2, hex(C.wallDark)); // alféizar
-  for (let i = 0; i < 5; i++) floret(pb, window + 2 + i * 5, wallTop + 34, 1, 0.05, rng.range(0.4, 1), rng); // macetero
+  // En medio de la calle que entra: un poste de luz y la caseta de vigilancia con su cámara.
+  const base = HORIZON + 1;
+  pb.ellipse(pole + 5, base, 12, 3, [255, 225, 160, 70]); // luz del poste en el asfalto
+  pb.rect(pole - 1, base - 1, 4, 2, hex('#4a4650'));
+  pb.rect(pole, base - 33, 2, 33, hex('#5a5560')); pb.rect(pole, base - 33, 1, 33, hex('#6e6975'));
+  pb.rect(pole + 2, base - 33, 5, 1, hex('#5a5560')); pb.rect(pole + 6, base - 32, 1, 1, hex('#5a5560'));
+  pb.rect(pole + 4, base - 31, 4, 1, hex('#3b3236')); pb.rect(pole + 4, base - 30, 4, 2, hex(C.lampLight)); pb.set(pole + 5, base - 30, hex('#ffffff'));
+  // Caseta: cuerpo claro con lado en sombra, techo de pizarra, ventanita encendida y puerta.
+  pb.rect(booth, base - 15, 14, 15, hex('#cfc6bd')); pb.rect(booth + 11, base - 15, 3, 15, hex('#a9a19a'));
+  pb.rect(booth - 1, base - 17, 16, 2, hex('#5f5a6a')); pb.rect(booth - 1, base - 18, 16, 1, hex('#77718a'));
+  pb.rect(booth + 3, base - 12, 5, 4, hex('#6a7a9a')); pb.rect(booth + 4, base - 11, 3, 2, hex(C.windowLight)); // ventana
+  pb.rect(booth + 9, base - 8, 3, 8, hex('#7a6b5a')); pb.set(booth + 10, base - 4, hex(C.flowerCenter)); // puerta
+  pb.rect(booth, base - 1, 14, 1, hex('#8d857e'));
+  // Cámara en la esquina del techo: cuerpo oscuro, lente y su luz roja (parpadea en el juego).
+  pb.rect(booth, base - 21, 4, 2, hex('#3b3236')); pb.set(booth - 1, base - 21, hex('#8fb3d9')); pb.rect(booth + 2, base - 19, 1, 1, hex('#3b3236'));
   // Macetas junto a la puerta.
   for (const px of [door - 12, door + 26]) {
     pb.rect(px, HORIZON - 6, 6, 6, hex('#a7674f')); pb.rect(px + 1, HORIZON - 6, 4, 1, hex('#c28667'));

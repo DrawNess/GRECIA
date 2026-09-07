@@ -43,8 +43,9 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 - Tramo 2 (atardecer): farol, segundo árbol.
 - Tramo 3 (noche, x 600–1046): **la esquina verde** — la pared verde de su
   casa a la entrada de la calle, donde más tiempo pasaban y hasta donde él la
-  acompañaba: pavimento, puerta de madera, ventana encendida con cortinas,
-  buzón, macetas, farol, y la calle que dobla en la esquina.
+  acompañaba: pavimento, puerta de madera, buzón, macetas, farol, y la calle
+  que dobla en la esquina con un poste de luz y una caseta de vigilancia con
+  cámara (luz roja que parpadea) al centro.
 - Tramo 4 (noche): tercer árbol, farol y **la banca grande con él sentado**
   (un poco más alto que ella). Con J junto a la banca, Grecia se sienta a su
   lado y quedan mirándose; cualquier flecha la levanta.
