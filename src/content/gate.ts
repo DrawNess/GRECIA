@@ -25,4 +25,6 @@ export const gate = {
   breakHint: 'J para romper el tronco: con el marcador al centro, golpeas fuerte',
   shelterHint: 'Bajo el toldo del kiosco los rayos no te alcanzan',
   flowerHint: 'Una flor de lila. Llévala contigo.',
+  roadHint: 'Mira a los dos lados: cruza cuando no venga ningún auto',
+  againHint: 'Otra vez, con calma.',
 };

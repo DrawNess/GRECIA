@@ -35,7 +35,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 
 ## Mundo (etapa 1) — el paseo como recuerdo
 
-- 2080 px (6½ pantallas). Vereda continua abajo; senda curva al árbol grande.
+- 2260 px (7 pantallas). Vereda continua abajo; senda curva al árbol grande.
 - **Día → noche** al caminar a la derecha (x 340–660): el cielo pasa por el
   atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
   faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
@@ -75,6 +75,13 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 - Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
   soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va
   volando; si ella se aleja un rato, vuelve a dormirse.
+- Tramo 5 (noche, después de Chimuelo): **la autopista** (x 2036–2124), en
+  perspectiva hacia el fondo, con guardarraíl, farolas y paso de cebra.
+  Minijuego: autos que vienen creciendo por el carril derecho (faros) y se
+  alejan por el izquierdo (luces rojas), cada 1,6–3,6 s por carril; hay que
+  cruzar cuando no venga ninguno. Si un auto pisa a Grecia o a Jhammil:
+  fundido corto y **vuelven a la banca**, de pie y de la mano ("Otra vez,
+  con calma."). Aviso al acercarse. Sonido: paso de auto y bocina.
 - De noche en el parque (fuera de la tormenta): luciérnagas y, de vez en
   cuando, una estrella fugaz.
 - **Sonido** generado por código (`engine/audio.ts`): viento, lluvia y truenos

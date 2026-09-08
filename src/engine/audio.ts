@@ -154,6 +154,29 @@ export class GameAudio {
   }
   /** Aleteo suave (mariposas, pájaros del arbusto). */
   flutter(): void { if (this.ctx) this.burst(1200, 0.6, 0.01, 0.25, 0.12, 'highpass'); }
+  /** Un auto que pasa cerca. */
+  whoosh(): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noise;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.8;
+    f.frequency.setValueAtTime(600, t); f.frequency.exponentialRampToValueAtTime(1800, t + 0.35); f.frequency.exponentialRampToValueAtTime(400, t + 0.9);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.28, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.95);
+    src.connect(f).connect(g).connect(this.master); src.start(t); src.stop(t + 1);
+  }
+  /** Bocina y frenazo. */
+  horn(): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (const f0 of [392, 494]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = f0;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.07, t + 0.02); g.gain.setValueAtTime(0.07, t + 0.45); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.6);
+      o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.65);
+    }
+    this.burst(2600, 2, 0.02, 0.5, 0.18, 'bandpass');
+  }
   /** Hojas al sacudir un arbusto. */
   rustle(): void { if (this.ctx) this.burst(2500, 0.5, 0.01, 0.18, 0.1, 'highpass'); }
 }

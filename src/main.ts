@@ -72,6 +72,10 @@ const step = (dt: number) => {
     else if (e === 'break') showCaption(stage.ui, gate.breakHint, 6000);
     else if (e === 'shelter') showCaption(stage.ui, gate.shelterHint, 5000);
     else if (e === 'flower') showCaption(stage.ui, gate.flowerHint, 6000);
+    else if (e === 'road') showCaption(stage.ui, gate.roadHint, 6000);
+    else if (e === 'hit:car') backToBench();
+    else if (e === 'sfx:whoosh') audio.whoosh();
+    else if (e === 'sfx:horn') audio.horn();
     else if (e === 'talk:bench') showDialog(stage.ui, story.benchTalk.lines.map((text) => ({ who: story.benchTalk.who, text })), () => scene.afterTalk());
     else if (e === 'caught') backToMenu();
     else if (e.startsWith('sfx:thunder')) audio.thunder(Number(e.split(':')[2] ?? 1));
@@ -85,6 +89,18 @@ const step = (dt: number) => {
     else if (e === 'sfx:rustle') audio.rustle();
   }
 };
+
+// Un auto los pisó: fundido corto y de vuelta a la banca.
+function backToBench(): void {
+  veil.style.transitionDuration = '0.4s';
+  veil.classList.remove('is-gone');
+  setTimeout(() => {
+    scene.respawnAtBench();
+    showCaption(stage.ui, gate.againHint, 3500);
+    veil.classList.add('is-gone');
+    setTimeout(() => { veil.style.transitionDuration = ''; }, 500);
+  }, 500);
+}
 
 // Algo la lastimó: fundido a crema y de vuelta al menú.
 function backToMenu(): void {

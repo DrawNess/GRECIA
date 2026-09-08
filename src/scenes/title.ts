@@ -10,7 +10,7 @@ import { GRECIA, GRECIA_SEATED, JHAMMIL, JHAMMIL_SEATED, SPRIG, type DirSprites 
 import { story } from '../content/story';
 import { ACTION, type Input } from '../engine/input';
 
-export const WORLD_W = 2080;
+export const WORLD_W = 2260;
 const HORIZON = 150;
 // De día junto al árbol; al caminar a la derecha cae la noche.
 const NIGHT_FROM = 340, NIGHT_TO = 660;
@@ -32,6 +32,11 @@ const BARRIERS = [1250, 1400, 1550];
 const KIOSK = { x: 1330, baseY: 151 };
 const FLOWER_SPOT = { x: 1612, baseY: 174 };
 const RUN_MULT = 1.7;
+// La autopista: cruza el camino después de Chimuelo y se pierde al fondo.
+const ROAD = { cx: 2080, x0: 2036, x1: 2124, vanishY: 95, nearY: 182, lane: 20 };
+const roadX = (t: number, off: number) => ROAD.cx + off * (0.12 + 0.88 * t);
+const roadY = (t: number) => ROAD.vanishY + (ROAD.nearY - ROAD.vanishY) * t;
+const roadS = (t: number) => 0.18 + 0.82 * t;
 const BENCH = { x: 1830, baseY: 165 };
 // Chimuelo duerme después de la banca, sobre el pasto.
 const DRAGON = { x: 1940, baseY: 164, w: 44, h: 30 };
@@ -64,6 +69,8 @@ interface Bolt { pts: Pt[]; t: number }
 interface Strike { x: number; groundY: number; t: number }
 // Rama que cae rápido (mundo): sombra pequeña; si alcanza a Grecia, tropieza.
 interface Branch { x: number; groundY: number; h: number; v: number; rot: number }
+// Auto en la autopista: t = 0 lejos … 1 cerca. `coming` = viene hacia la cámara.
+interface Car { t: number; coming: boolean; img: HTMLCanvasElement; passed: boolean }
 type TreeState = 'stand' | 'shake' | 'fall' | 'down';
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
@@ -114,6 +121,12 @@ export class TitleScene {
   private readonly props: Prop[] = [];
   private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false, stun: 0, knock: 0, running: false, stamina: 1, flower: false };
   private readonly branches: Branch[] = [];
+  private readonly cars: Car[] = [];
+  private readonly carImgs: { front: HTMLCanvasElement[]; rear: HTMLCanvasElement[] };
+  private nextCarIn = 1.5;
+  private nextCarOut = 2.5;
+  private roadSeen = false;
+  private runOver = false;
   private nextBranch = 2;
   private flowerTimer = -1;
   private shelterSeen = false;
@@ -198,6 +211,7 @@ export class TitleScene {
     paintGround(world, rng);
     paintStreet(world, rng);
     paintPuddles(world, rng);
+    paintHighway(world, rng);
     paintCanopyAt(world, rng, dew, 160, 40, 200, 82, 1);
     paintCanopyAt(world, rng, dew, 500, 70, 66, 44, 0.62);
     paintCanopyAt(world, rng, dew, 1768, 64, 72, 48, 0.66);
@@ -226,7 +240,11 @@ export class TitleScene {
     this.benchEmpty = renderBench(null);
     const hr = toCanvasesJ(JHAMMIL.side);
     this.himSprites = { up: toCanvasesJ(JHAMMIL.back), down: toCanvasesJ(JHAMMIL.front), right: hr, left: { idle: hr.idle.map(flipX), walk: hr.walk.map(flipX) } };
-    this.addProp('gate', renderGate(rng), 2052, 160, 16, { hw: 15, depth: 4 });
+    this.addProp('gate', renderGate(rng), 2226, 160, 16, { hw: 15, depth: 4 });
+    // Farolas de la autopista.
+    for (const t of [0.3, 0.68]) this.lights.push({ x: roadX(t, -30) - 2, y: roadY(t) - 26 * roadS(t) - 4, r: 7, col: '255,236,190', a: 0.42 });
+    const colors = ['#e8e6ea', '#c8443f', '#3b4a6b', '#8a8f99', '#d9b86a'];
+    this.carImgs = { front: colors.map((c) => renderCar(true, c)), rear: colors.map((c) => renderCar(false, c)) };
     // El kiosco rojo: bajo su toldo los rayos no llegan.
     this.addProp('kiosk', renderKiosk(), KIOSK.x, KIOSK.baseY, 14);
     this.lights.push({ x: KIOSK.x + 1, y: KIOSK.baseY - 22, r: 6, col: '255,225,170', a: 0.3 });
@@ -600,6 +618,45 @@ export class TitleScene {
     }
   }
 
+  // Autopista: autos que vienen creciendo por la derecha y se alejan por la
+  // izquierda. Si uno pisa a Grecia o a Jhammil, vuelven a la banca.
+  private updateHighway(dt: number): void {
+    const p = this.player, r = this.rng;
+    if (!this.roadSeen && p.x > ROAD.x0 - 110) { this.roadSeen = true; this.events.push('road'); }
+    const active = p.x > ROAD.x0 - 260 && p.x < ROAD.x1 + 200;
+    this.nextCarIn -= dt; this.nextCarOut -= dt;
+    if (active && this.nextCarIn <= 0) { this.cars.push({ t: 0, coming: true, img: r.pick(this.carImgs.front), passed: false }); this.nextCarIn = r.range(1.6, 3.4); }
+    if (active && this.nextCarOut <= 0) { this.cars.push({ t: 1.15, coming: false, img: r.pick(this.carImgs.rear), passed: false }); this.nextCarOut = r.range(1.8, 3.6); }
+    const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
+    const hx = this.him.x + GIRL_W / 2, hy = this.him.y + HIM_H - 1;
+    for (let i = this.cars.length - 1; i >= 0; i--) {
+      const c = this.cars[i];
+      c.t += (c.coming ? 1 : -1) * dt / 2.2;
+      if (c.t > 1.2 || c.t < -0.05) { this.cars.splice(i, 1); continue; }
+      const cx = roadX(c.t, c.coming ? ROAD.lane : -ROAD.lane), cy = roadY(c.t), s = roadS(c.t);
+      const hw = 10 * s + 2;
+      const hits = (x: number, y: number) => Math.abs(x - cx) < hw && Math.abs(y - cy) < 5;
+      if (!c.passed && cy > fy - 6 && cy < fy + 6 && Math.abs(cx - fx) < 70) { c.passed = true; this.events.push('sfx:whoosh'); }
+      if (!this.runOver && !p.sitting && (hits(fx, fy) || (this.him.active && hits(hx, hy)))) {
+        this.runOver = true;
+        p.moving = false; p.stun = 99;
+        this.events.push('sfx:horn'); this.events.push('hit:car');
+      }
+    }
+  }
+
+  /** Tras un atropello: de vuelta a la banca, de pie y de la mano. */
+  respawnAtBench(): void {
+    const p = this.player;
+    this.runOver = false;
+    p.stun = 0; p.knock = 0; p.running = false; p.stamina = 1; p.sitting = false;
+    p.x = BENCH.x - 14; p.y = BENCH.baseY + 4 - GIRL_H + 1; p.facing = 'right';
+    if (this.him.active) { this.him.x = p.x - HAND_GAP; this.him.y = p.y - 1 + (GIRL_H - HIM_H); this.him.side = -1; this.him.facing = 'right'; }
+    this.cars.length = 0;
+    this.camX = Math.min(WORLD_W - VW, Math.max(0, p.x + GIRL_W / 2 - VW / 2));
+    if (this.dragon.state === 'gone') this.dragon.t = 99;
+  }
+
   // Luciérnagas en el parque de noche (no en la tormenta) y, de vez en cuando,
   // una estrella fugaz.
   private updateNightLife(dt: number): void {
@@ -822,6 +879,7 @@ export class TitleScene {
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
       this.updateDragon(dt);
       this.updateStorm(dt);
+      this.updateHighway(dt);
       this.updateNightLife(dt);
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
@@ -926,6 +984,13 @@ export class TitleScene {
         : this.dragonImgs.fly[Math.floor(this.t / 0.14) & 1];
       const dx = Math.round(d.x) - cam, dy = Math.round(d.y);
       if (dx < VW && dx + DRAGON.w > 0) items.push({ baseY: d.state === 'fly' ? 9999 : DRAGON.baseY, draw: () => ctx.drawImage(img, dx, dy) });
+    }
+    for (const c of this.cars) {
+      const cx = roadX(c.t, c.coming ? ROAD.lane : -ROAD.lane), cy = roadY(c.t), s = roadS(c.t);
+      const w = Math.max(3, Math.round(20 * s)), h = Math.max(2, Math.round(11 * s));
+      const dx = Math.round(cx - w / 2) - cam, dy = Math.round(cy - h);
+      if (dx > VW || dx + w < 0) continue;
+      items.push({ baseY: cy, draw: () => ctx.drawImage(c.img, dx, dy, w, h) });
     }
     if (withPlayer && this.him.active) {
       const h = this.him;
@@ -1158,6 +1223,18 @@ export class TitleScene {
     }
     const stormK = stormAt(this.camX + VW / 2) * (1 - this.calm());
     if (stormK > 0) { haze.fillStyle = `rgba(38,42,70,${(0.32 * stormK).toFixed(3)})`; haze.fillRect(0, 0, SW, SH); }
+    // Faros de los autos que vienen y luces rojas de los que se van.
+    for (const c of this.cars) {
+      const cx = roadX(c.t, c.coming ? ROAD.lane : -ROAD.lane), cy = roadY(c.t), s = roadS(c.t);
+      const sx = (cx - cam) / 4, sy = (cy - 5 * s) / 4, rr = (c.coming ? 5 : 2.5) * s + 1;
+      if (sx < -rr || sx > SW + rr) continue;
+      const g = haze.createRadialGradient(sx, sy, 0, sx, sy, rr * 2.2);
+      const col = c.coming ? '255,240,200' : '255,90,90';
+      g.addColorStop(0, `rgba(${col},${(c.coming ? 0.45 : 0.3) * s})`);
+      g.addColorStop(1, `rgba(${col},0)`);
+      haze.fillStyle = g;
+      haze.fillRect(sx - rr * 2.2, sy - rr * 2.2, rr * 4.4, rr * 4.4);
+    }
     // Faroles y ventana encendidos.
     for (const l of this.lights) {
       if (l.a <= 0.02) continue;
@@ -1537,6 +1614,7 @@ function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
     if (x > STORM.x0 - 20 && x < STORM.x1 + 20) continue; // en la tormenta solo hay problemas
     if (Math.abs(x - BENCH.x) < 52) continue; // espacio libre alrededor de la banca
     if (Math.abs(x - DRAGON.x - DRAGON.w / 2) < 44) continue; // y alrededor de Chimuelo
+    if (Math.abs(x - ROAD.cx) < 76) continue; // la autopista
     if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
     spots.push([x, baseY, r]);
   }
@@ -1773,6 +1851,49 @@ function renderFallenTrunk(rng: Rng, hp: number): HTMLCanvasElement {
     pb.set(x, y, pale); pb.set(x + 1, y + 1, hex('#b39c8e'));
   }
   if (hp === 1) for (let y = 8; y < 30; y += 2) pb.set(9 + (y % 4 === 0 ? 1 : 0), y, hex('#b39c8e'));
+  return pb.toCanvas();
+}
+
+// Autopista en perspectiva: asfalto, líneas, guardarraíl, farolas y paso de cebra.
+function paintHighway(pb: PixelBuffer, rng: Rng): void {
+  const { cx, x0, x1, vanishY, nearY } = ROAD;
+  const asphalt = hex('#3b3b46'), asphaltL = hex('#474752'), white = hex('#e6e2d8'), yellow = hex('#d8c26a'), rail = hex('#9a9aa6'), post = hex('#6a6a76');
+  const xl = (t: number) => cx - 4 + (x0 - (cx - 4)) * t, xr = (t: number) => cx + 4 + (x1 - (cx + 4)) * t;
+  pb.poly([[cx - 4, vanishY], [cx + 4, vanishY], [x1, nearY + 2], [x0, nearY + 2]], asphalt);
+  for (let i = 0; i < 260; i++) { const t = Math.sqrt(rng.next()); pb.set(Math.round(xl(t) + (xr(t) - xl(t)) * rng.next()), Math.round(roadY(t)), asphaltL); }
+  for (let t = 0; t <= 1; t += 0.012) {
+    const y = Math.round(roadY(t));
+    pb.set(Math.round(xl(t)) + 1, y, white); pb.set(Math.round(xr(t)) - 1, y, white);
+    if (Math.floor(t * 30) % 2 === 0) pb.rect(cx, y, t > 0.5 ? 1 : 1, 1, yellow);
+  }
+  // Guardarraíl a ambos lados, más alto cuanto más cerca.
+  for (let t = 0.05; t <= 1; t += 0.07) {
+    const h = Math.max(2, Math.round(7 * roadS(t))), y = Math.round(roadY(t));
+    for (const x of [Math.round(xl(t)) - 3, Math.round(xr(t)) + 2]) { pb.rect(x, y - h, 1, h, post); pb.rect(x - 1, y - h, 3, 1, rail); }
+  }
+  // Farolas altas de autopista, con el brazo hacia la calzada.
+  for (const t of [0.3, 0.68]) {
+    const s = roadS(t), x = Math.round(roadX(t, -30)) - 2, y = Math.round(roadY(t)), h = Math.round(26 * s) + 4;
+    pb.rect(x, y - h, 2, h, hex('#5a5560')); pb.rect(x, y - h, Math.round(6 * s) + 3, 1, hex('#5a5560'));
+    pb.rect(x + Math.round(6 * s) + 1, y - h, 3, 2, hex(C.lampLight));
+  }
+  // Bordillos y paso de cebra donde la vereda cruza la autopista.
+  pb.rect(x0 - 3, 150, 3, 32, hex(C.curb)); pb.rect(x1, 150, 3, 32, hex(C.curb));
+  for (let x = x0 + 4; x < x1 - 4; x += 9) pb.rect(x, 168, 5, 11, hex('#d9d5cc'));
+}
+
+// Auto visto de frente (faros) o de atrás (luces rojas), 20×11.
+function renderCar(front: boolean, color: string): HTMLCanvasElement {
+  const pb = new PixelBuffer(20, 11);
+  const body = hex(color), dark = hex('#1e1c26'), glass = hex('#2a2f45'), chrome = hex('#b9bcc6');
+  pb.rect(4, 0, 12, 4, dark); pb.rect(5, 1, 10, 3, glass);
+  if (!front) pb.rect(6, 1, 8, 1, hex('#4a5270'));
+  pb.rect(0, 4, 20, 6, dark); pb.rect(1, 4, 18, 5, body);
+  pb.rect(2, 4, 16, 1, mix(color, '#ffffff', 0.35));
+  if (front) { pb.rect(2, 6, 3, 2, hex('#fff6d6')); pb.rect(15, 6, 3, 2, hex('#fff6d6')); pb.rect(7, 7, 6, 1, dark); pb.rect(8, 6, 4, 1, chrome); }
+  else { pb.rect(2, 6, 3, 2, hex('#ff5a5a')); pb.rect(15, 6, 3, 2, hex('#ff5a5a')); pb.rect(8, 7, 4, 1, hex('#e6e2d8')); }
+  pb.rect(0, 9, 20, 1, chrome);
+  pb.rect(1, 10, 4, 1, dark); pb.rect(15, 10, 4, 1, dark);
   return pb.toCanvas();
 }
 

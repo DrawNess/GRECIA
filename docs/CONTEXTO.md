@@ -27,7 +27,7 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
 2. **Entrada al juego**: el panel se desvanece, la niebla y el desenfoque se
    despejan, un golpe de viento se lleva las flores del frente por delante de
    la cámara, y Grecia queda bajo control.
-3. **Paseo** de 2080 px (6½ pantallas) con cámara suave y parallax:
+3. **Paseo** de 2260 px (7 pantallas) con cámara suave y parallax:
    - Tramo 1 (día): el árbol grande, arbustos.
    - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol.
    - Tramo 3 (noche): **la esquina verde** — pared verde, y pegada a ella
@@ -54,6 +54,10 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      ella mira, con las manos unidas dibujadas entre los dos). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
      despierta, suelta corazones y se va volando; vuelve a dormirse si ella
      se aleja un rato.
+   - Tramo 5 (noche): **la autopista** en perspectiva. Autos que vienen
+     (faros) y se van (luces rojas); cruzar cuando no venga ninguno. Si un
+     auto pisa a cualquiera de los dos → fundido y vuelta a la banca
+     (`respawnAtBench`), no al menú.
    - Puerta de jardín cerrada al final (meta provisional).
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
    mariposas o pájaros (una vez cada uno). J junto a la banca: sentarse.
@@ -142,6 +146,12 @@ scripts/hash.mjs           `pnpm hash`
   sigue su velocidad; `holding` cuando está en su sitio → se dibujan las
   manos unidas (píxeles de piel entre ambos) al dibujar a Grecia. Sprites
   `JHAMMIL` (perfil/espaldas/frente, 12×26, caminata de 4 cuadros).
+- **Autopista** (`updateHighway`): `ROAD` define la calzada; `roadX/roadY/
+  roadS(t)` dan posición y escala por profundidad t (0 lejos … 1 cerca).
+  `cars` avanzan (vienen) o retroceden (se van) en 2,2 s; se dibujan
+  escalados y ordenados por su base; faros/luces rojas en `haze`. Atropello
+  = base del auto a ±5 px de los pies de Grecia o Jhammil y dentro de su
+  ancho → evento `hit:car` → main funde y llama `respawnAtBench()`.
 - **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
   hay tormenta; estrella fugaz cada 12–26 s.
 - **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;
@@ -194,6 +204,8 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   futuro contigo…" hasta "…alguien que te elegirá cada día", y el cierre
   "¿Vamos? Te sigo a donde vayas." (editable). Después él la sigue.
 - Tecla de interacción: **J** (decisión de Jhammil). Correr: Shift/K.
+- **La autopista** (2026-09-08): minijuego de cruzar de noche esquivando
+  autos; si los pisan, reinician desde la banca (pedido de Jhammil).
 - **La flor de lila**: la recompensa de la tormenta; Grecia la lleva en la
   mano y la usará para abrir una puerta al final del tramo (Jhammil lo
   explicará después).
