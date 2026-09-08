@@ -12,6 +12,8 @@ import { startLoop } from './engine/loop';
 import { writeSave, resetSave } from './engine/save';
 import { TitleScene } from './scenes/title';
 import { mountGate, showCaption } from './ui/gate';
+import { showDialog } from './ui/dialog';
+import { story } from './content/story';
 import { gate } from './content/gate';
 
 // tuusuario.github.io/grecia/#reset borra el progreso guardado (útil para probar).
@@ -70,6 +72,7 @@ const step = (dt: number) => {
     else if (e === 'break') showCaption(stage.ui, gate.breakHint, 6000);
     else if (e === 'shelter') showCaption(stage.ui, gate.shelterHint, 5000);
     else if (e === 'flower') showCaption(stage.ui, gate.flowerHint, 6000);
+    else if (e === 'talk:bench') showDialog(stage.ui, story.benchTalk.lines.map((text) => ({ who: story.benchTalk.who, text })), () => scene.afterTalk());
     else if (e === 'caught') backToMenu();
     else if (e.startsWith('sfx:thunder')) audio.thunder(Number(e.split(':')[2] ?? 1));
     else if (e === 'sfx:hit') audio.hit();

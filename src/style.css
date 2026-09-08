@@ -204,6 +204,49 @@ body {
 }
 .mute:hover { opacity: 1; }
 
+/* ── Caja de diálogo ── */
+.dialog {
+  pointer-events: none;
+  position: absolute;
+  left: calc(18 * var(--u));
+  right: calc(18 * var(--u));
+  bottom: calc(7 * var(--u));
+  min-height: calc(36 * var(--u));
+  box-sizing: border-box;
+  padding: calc(4 * var(--u)) calc(7 * var(--u)) calc(6 * var(--u));
+  background: rgba(253, 251, 255, 0.93);
+  border: var(--u) solid var(--lilac-2);
+  outline: var(--u) solid rgba(255, 255, 255, 0.85);
+  outline-offset: calc(-3 * var(--u));
+  box-shadow: calc(2 * var(--u)) calc(3 * var(--u)) 0 rgba(59, 42, 51, 0.14);
+  color: var(--ink);
+  opacity: 0;
+  transform: translateY(calc(3 * var(--u)));
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.dialog.is-shown { opacity: 1; transform: none; }
+.dialog.is-gone { opacity: 0; transform: translateY(calc(3 * var(--u))); }
+.dialog__who {
+  font-family: 'Pixelify Sans', 'DotGothic16', monospace;
+  font-size: calc(7 * var(--u));
+  color: var(--lilac-4);
+  margin-bottom: calc(2 * var(--u));
+}
+.dialog__text {
+  font-size: calc(6 * var(--u));
+  line-height: 1.45;
+  white-space: pre-line;
+}
+.dialog__arrow {
+  position: absolute;
+  right: calc(6 * var(--u));
+  bottom: calc(2 * var(--u));
+  font-size: calc(5 * var(--u));
+  color: var(--lilac-3);
+  animation: arrow 0.9s ease-in-out infinite;
+}
+@keyframes arrow { 50% { transform: translateY(calc(-1 * var(--u))); } }
+
 /* ── Texto al desbloquear ── */
 .caption {
   position: absolute;

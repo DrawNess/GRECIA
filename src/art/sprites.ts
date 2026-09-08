@@ -204,6 +204,98 @@ const JHAMMIL_SIT = [
 ];
 export const JHAMMIL_SEATED = sprite(JHAMMIL_SIT, JHAMMIL_PAL);
 
+// Jhammil de pie (12×26): de perfil, de espaldas y de frente, con caminata.
+const JHAMMIL_S = [
+  '....OOOO....',
+  '...OkkkkO...',
+  '..OkkkkkkO..',
+  '..OkkkkSSO..',
+  '..OkkkSSSO..',
+  '..OkkkSOSO..',
+  '..OkkkSSSO..',
+  '..OkkkSSsO..',
+  '...OSSSO....',
+  '..OWWWWWWO..',
+  '..OWWWwWWO..',
+  '..OWWWwWWO..',
+  '..OWwWwWWO..',
+  '..OWwWwWWO..',
+  '..OWSWwWWO..',
+  '..OWSWwWWO..',
+  '..OWWWwWWO..',
+  '..OwwwwwwO..',
+  '..OPPPPPPO..',
+  '..OPPPPPPO..',
+  '..OPPPPPPO..',
+  '..OPPPPPPO..',
+  '..OPPOOPPO..',
+  '..OPPOOPPO..',
+  '..OBBOOBBO..',
+  '..OOOOOOOO..',
+];
+const JHAMMIL_B = [
+  '....OOOO....',
+  '...OkkkkO...',
+  '..OkkkkkkO..',
+  '..OkkkkkkO..',
+  '..OkkkkkkO..',
+  '..OkkkkkkO..',
+  '..OkkkkkkO..',
+  '...OkkkkO...',
+  '...OSSSSO...',
+  '..OWWWWWWO..',
+  '.OWWWWWWWWO.',
+  '.OWWWWwWWWO.',
+  '.OWWWWwWWWO.',
+  '.OWWWWwWWWO.',
+  '.OSWWWwWWSO.',
+  '.OSWWWwWWSO.',
+  '.OWWWWwWWWO.',
+  '.OwwwwwwwwO.',
+  '..OPPPPPPO..',
+  '..OPPPPPPO..',
+  '..OPPPPPPO..',
+  '..OPPPPPPO..',
+  '..OPPOOPPO..',
+  '..OPPOOPPO..',
+  '..OBBOOBBO..',
+  '..OOOOOOOO..',
+];
+const JHAMMIL_F = JHAMMIL_B.map((row, i) => {
+  if (i === 3) return '..OkSSSSkO..';
+  if (i === 4) return '..OSSSSSSO..';
+  if (i === 5) return '..OSOSSOSO..';
+  if (i === 6) return '..OSSSSSSO..';
+  if (i === 7) return '...OSssSO...';
+  return row;
+});
+const J_APART: [string, string, string, string] = ['.OPPO..OPPO.', '.OPPO..OPPO.', '.OBBO..OBBO.', '.OOOO..OOOO.'];
+const J_MID: [string, string, string, string] = ['...OPPPPO...', '...OPPPPO...', '...OBBBBO...', '...OOOOOO...'];
+const jLegs = (rows: string[], legs: [string, string, string, string]) => { for (let k = 0; k < 4; k++) rows[22 + k] = legs[k]; };
+const jArmsFB = (rows: string[], step: number) => {
+  const up = step === 0 ? 2 : 9, down = step === 0 ? 9 : 2;
+  put(rows, 13, up, 'S'); put(rows, 15, up, 'W');
+  put(rows, 14, down, 'W'); put(rows, 16, down, 'S');
+};
+const jArmSide = (rows: string[], step: number) => {
+  put(rows, 14, 4, 'W'); put(rows, 15, 4, 'W');
+  const c = step === 0 ? 6 : 3;
+  put(rows, 14, c, 'S'); put(rows, 15, c, 'S');
+};
+function jWalk(base: string[], arms: (rows: string[], step: number) => void): string[][] {
+  const f0 = base.slice(); jLegs(f0, J_APART); arms(f0, 0);
+  const f1 = base.slice(); jLegs(f1, J_MID);
+  const f2 = base.slice(); jLegs(f2, J_APART); arms(f2, 1);
+  const f3 = base.slice(); jLegs(f3, J_MID);
+  return [f0, f1, f2, f3];
+}
+const mkJ = (rows: string[]) => sprite(rows, JHAMMIL_PAL);
+export const JHAMMIL: { back: DirSprites; front: DirSprites; side: DirSprites } = {
+  back: { idle: [mkJ(JHAMMIL_B)], walk: jWalk(JHAMMIL_B, jArmsFB).map(mkJ) },
+  front: { idle: [mkJ(JHAMMIL_F)], walk: jWalk(JHAMMIL_F, jArmsFB).map(mkJ) },
+  side: { idle: [mkJ(JHAMMIL_S)], walk: jWalk(JHAMMIL_S, jArmSide).map(mkJ) },
+};
+
 // Ramita de lila (ícono del menú y favicon).
 export const SPRIG = sprite(
   [

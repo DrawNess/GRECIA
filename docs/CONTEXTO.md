@@ -48,7 +48,9 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      (Jhammil lo explicará).
    - Tramo 4 (noche): tercer árbol, farol, **la banca grande con Jhammil**
      sentado; con J Grecia se sienta a su lado y se miran (etiqueta con su
-     nombre). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
+     nombre). La cámara se acerca 2× y aparece la caja de diálogo con el
+     poema de Jhammil (`story.benchTalk`); al terminar se paran y Jhammil la
+     sigue el resto del paseo (`him`, sigue el rastro de Grecia). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
      despierta, suelta corazones y se va volando; vuelve a dormirse si ella
      se aleja un rato.
    - Puerta de jardín cerrada al final (meta provisional).
@@ -89,7 +91,8 @@ src/engine/audio.ts        sonido por código (WebAudio): ambientes y efectos
 src/art/palette.ts         TODOS los colores, con nombre
 src/art/sprites.ts         Grecia (3 vistas, caminata, sentada), Jhammil sentado, ramita
 src/scenes/title.ts        LA escena: menú + mundo + objetos + animaciones (≈1200 líneas)
-src/ui/gate.ts             panel de nombre/fecha (DOM), ayuda
+src/ui/gate.ts             panel de nombre/fecha (DOM), ayudas (una a la vez)
+src/ui/dialog.ts           caja de diálogo con máquina de escribir (J/Enter pasa)
 src/content/gate.ts        textos y hashes de la puerta
 src/content/story.ts       nombres (y, próximamente, frases del paseo)
 scripts/hash.mjs           `pnpm hash`
@@ -128,6 +131,14 @@ scripts/hash.mjs           `pnpm hash`
 - **Bichos** (`critters`): mariposas, pájaros, pétalos, corazones, "z".
 - **Chimuelo** (`dragon`): estados sleep → wake → fly → gone → sleep.
   Sprites procedimentales en `renderDragon()`.
+- **Charla en la banca**: `sit()` → `zoomTarget = 2`, `busy = true`
+  (la escena ignora el teclado) y evento `talk:bench`; main abre
+  `showDialog(story.benchTalk)`; al terminar `afterTalk()`: banca vacía,
+  `him.active`, zoom 1. El zoom se hace re-dibujando la capa nítida (y la
+  haze) sobre sí mismas ampliadas, centradas en la banca.
+- **Jhammil acompañante** (`updateFollower`): guarda un rastro de posiciones
+  de Grecia cada 4 px y camina hacia el punto 6 atrás; sprites `JHAMMIL`
+  (perfil/espaldas/frente, 12×26, caminata de 4 cuadros).
 - **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
   hay tormenta; estrella fugaz cada 12–26 s.
 - **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;
@@ -176,6 +187,9 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   la historia.
 - **Chimuelo**: dragón negro dormido después de la banca; despierta con
   ella, corazones, y vuela.
+- **El poema de la banca** (texto de Jhammil, en `story.benchTalk`): "Quiero un
+  futuro contigo…" hasta "…alguien que te elegirá cada día", y el cierre
+  "¿Vamos? Te sigo a donde vayas." (editable). Después él la sigue.
 - Tecla de interacción: **J** (decisión de Jhammil). Correr: Shift/K.
 - **La flor de lila**: la recompensa de la tormenta; Grecia la lleva en la
   mano y la usará para abrir una puerta al final del tramo (Jhammil lo
@@ -187,8 +201,8 @@ Textos editables: `src/content/story.ts` (nombres; próximamente frases) y
 
 ## 6. Pendientes (en orden sugerido)
 
-1. **Caja de diálogo** con máquina de escribir: qué se lee con J frente a su
-   casa y al sentarse en la banca (Jhammil aún no dio los textos).
+1. **Más diálogos**: la caja ya existe (banca). Falta qué se lee con J frente
+   a su casa, con Chimuelo, y la puerta final (Jhammil dará los textos).
 2. **Fecha** de la segunda validación (Jhammil aún no la dio): generar
    `dateHash` con `pnpm hash "DD/MM/AAAA"` y pegarlo en `gate.ts`; el paso
    ya está programado y se activa solo.

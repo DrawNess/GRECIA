@@ -28,7 +28,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 | 0 | Setup: repo, Vite/TS, Action → Pages, menú con validación de nombre | ✅ código listo · ⏳ falta crear el repo en GitHub y hacer push |
 | 1 | Núcleo del motor: loop, input, sprites animados, colisiones, cámara | ✅ input · sprites 3 direcciones con ciclo de caminata de 4 cuadros · movimiento en franja de suelo · orden por profundidad · colisiones con troncos, faroles, banca y puerta · mundo de 1280 px con cámara suave y parallax (ciudad 0.2×, árboles lejanos 0.45×) |
 | 2 | Capa de ensueño en el juego: parallax, DOF, partículas, transiciones, caja de diálogo | pendiente |
-| 3 | Interacción y guardado: objetos con `J`, diálogos, fragmentos, flags | 🔨 empezado: arbustos con indicador `J`; al pulsar salen mariposas o pájaros (aleatorio, una vez por arbusto). Falta: diálogos, fragmentos, flags |
+| 3 | Interacción y guardado: objetos con `J`, diálogos, fragmentos, flags | 🔨 arbustos, banca, troncos, flor; **caja de diálogo con máquina de escribir** (`ui/dialog.ts`) usada en la banca. Falta: más diálogos, flags guardados |
 | 4 | Puerta + QR: 2ª validación (fecha), token en URL, carta cifrada, tarjeta "ábrelo en la compu", QR | pendiente (falta la fecha) |
 | 5 | Diseño de niveles: escenas y recuerdos (material del autor) | pendiente |
 | 6 | Final y pulido: carta con máquina de escribir, música opcional, QA en PC débil, QR impreso | 🔨 sonido ambiental y efectos listos (sin música); resto pendiente |
@@ -65,7 +65,11 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   suave). Servirá para abrir una puerta al final (Jhammil lo explicará).
 - Tramo 4 (noche): tercer árbol, farol y **la banca grande con Jhammil**
   sentado (cabello corto, camisa blanca, un poco más alto que ella); su nombre
-  aparece en una etiqueta al acercarse. Con J junto a la banca, Grecia se sienta a su
+  aparece en una etiqueta al acercarse. Al sentarse con J: **la cámara se
+  acerca 2×** y aparece la **caja de diálogo** con el poema de Jhammil
+  (`src/content/story.ts`, máquina de escribir, J/Enter pasa). Al terminar
+  se paran los dos y **Jhammil la sigue** a donde vaya (sprites de pie y
+  caminata, sigue su rastro unos pasos atrás). Con J junto a la banca, Grecia se sienta a su
   lado y quedan mirándose; cualquier flecha la levanta.
 - Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
   soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va

@@ -6,7 +6,7 @@ import { PixelBuffer, hex, sprite, type RGBA } from '../engine/pixels';
 import { Rng } from '../engine/rng';
 import { VW, VH, SW, SH } from '../engine/stage';
 import { C } from '../art/palette';
-import { GRECIA, GRECIA_SEATED, JHAMMIL_SEATED, SPRIG, type DirSprites } from '../art/sprites';
+import { GRECIA, GRECIA_SEATED, JHAMMIL, JHAMMIL_SEATED, SPRIG, type DirSprites } from '../art/sprites';
 import { story } from '../content/story';
 import { ACTION, type Input } from '../engine/input';
 
@@ -77,6 +77,9 @@ interface Star { x: number; y: number; ph: number }
 interface Firefly { x: number; y: number; vx: number; vy: number; ph: number }
 interface Meteor { x: number; y: number; vx: number; vy: number; t: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
+// Jhammil cuando la acompaña: sigue el rastro de Grecia.
+interface Follower { active: boolean; x: number; y: number; facing: Facing; moving: boolean; walkT: number }
+const HIM_H = 26;
 
 const PETAL_COLS = [C.lilac, C.lilacLight, C.lilacMid, C.lilacPale];
 
@@ -115,6 +118,15 @@ export class TitleScene {
   private shelterSeen = false;
   private dustTimer = 0;
   private readonly carried: HTMLCanvasElement;
+  private readonly himSprites: Record<Facing, DirCanvases>;
+  private readonly benchEmpty: HTMLCanvasElement;
+  private readonly him: Follower = { active: false, x: 0, y: 0, facing: 'left', moving: false, walkT: 0 };
+  private readonly trail: Pt[] = [];
+  private zoom = 1;
+  private zoomTarget = 1;
+  private busy = false;       // hay una charla abierta: el teclado es de la caja de diálogo
+  private benchTalked = false;
+  private zoomBox: [number, number, number, number] | null = null;
   // Tormenta.
   private readonly clouds: HTMLCanvasElement;
   private readonly rain: Rain[] = [];
@@ -211,6 +223,9 @@ export class TitleScene {
     this.lights.push({ x: STREET.house + 27, y: HORIZON - 15, r: 6, col: '255,220,150', a: 0.3 });
     // La banca grande, con Jhammil sentado mirando hacia donde llegará ella.
     this.addProp('bench', renderBench(JHAMMIL_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
+    this.benchEmpty = renderBench(null);
+    const hr = toCanvasesJ(JHAMMIL.side);
+    this.himSprites = { up: toCanvasesJ(JHAMMIL.back), down: toCanvasesJ(JHAMMIL.front), right: hr, left: { idle: hr.idle.map(flipX), walk: hr.walk.map(flipX) } };
     this.addProp('gate', renderGate(rng), 2052, 160, 16, { hw: 15, depth: 4 });
     // El kiosco rojo: bajo su toldo los rayos no llegan.
     this.addProp('kiosk', renderKiosk(), KIOSK.x, KIOSK.baseY, 14);
@@ -323,7 +338,7 @@ export class TitleScene {
   nameTag(): { text: string; x: number; y: number } | null {
     if (this.mode !== 'game') return null;
     const cam = Math.round(this.camX);
-    if (this.player.sitting || this.nearProp?.kind === 'bench') return { text: story.himName, x: BENCH.x + 9 - cam, y: BENCH.baseY - 29 };
+    if (!this.benchTalked && (this.player.sitting || this.nearProp?.kind === 'bench')) return { text: story.himName, x: BENCH.x + 9 - cam, y: BENCH.baseY - 29 };
     const d = this.dragon;
     if (d.state === 'wake' || (d.state === 'fly' && d.t < 1.5)) return { text: story.dragonName, x: Math.round(d.x) + 12 - cam, y: Math.round(d.y) - 3 };
     return null;
@@ -444,6 +459,7 @@ export class TitleScene {
     let best: Prop | null = null, bestD = Infinity;
     for (const pr of this.props) {
       if (pr.kind !== 'bush' && pr.kind !== 'bench' && pr.kind !== 'barrier' && pr.kind !== 'flower') continue;
+      if (pr.kind === 'bench' && this.benchTalked) continue;
       const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
       if (pr.kind === 'barrier' && pr.tree !== 'down') continue;
       if (pr.kind === 'barrier' ? dx > 22 : dx > pr.r + 9 || dy > 14) continue;
@@ -459,6 +475,45 @@ export class TitleScene {
     const p = this.player;
     p.sitting = true; p.moving = false; p.walkT = 0; p.facing = 'right';
     p.x = BENCH.x - 22 + 8; p.y = BENCH.baseY - 25;
+    this.zoomTarget = 2;
+    if (!this.benchTalked) { this.busy = true; this.events.push('talk:bench'); }
+  }
+
+  /** Terminó la charla: se paran los dos y Jhammil la acompaña desde aquí. */
+  afterTalk(): void {
+    this.busy = false;
+    this.benchTalked = true;
+    this.zoomTarget = 1;
+    const p = this.player;
+    p.sitting = false;
+    p.y = BENCH.baseY + 4 - GIRL_H + 1;
+    p.facing = 'right';
+    const bench = this.props.find((pr) => pr.kind === 'bench');
+    if (bench) bench.img = this.benchEmpty;
+    this.him.active = true;
+    this.him.x = BENCH.x + 6; this.him.y = BENCH.baseY + 4 - HIM_H + 1; this.him.facing = 'left';
+    this.trail.length = 0;
+    this.nearProp = null;
+  }
+
+  // Jhammil sigue el rastro de Grecia, unos pasos atrás.
+  private updateFollower(dt: number): void {
+    const h = this.him, p = this.player;
+    if (!h.active) return;
+    const last = this.trail[this.trail.length - 1];
+    if (!last || Math.hypot(p.x - last[0], p.y - last[1]) >= 4) { this.trail.push([p.x, p.y]); if (this.trail.length > 40) this.trail.shift(); }
+    const target = this.trail.length > 6 ? this.trail[this.trail.length - 6] : [p.x - 18, p.y] as Pt;
+    const dx = target[0] - h.x, dy = target[1] + (GIRL_H - HIM_H) - h.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 2 && !p.sitting) {
+      const sp = Math.min(d / dt, (p.running ? SPEED_X * RUN_MULT : SPEED_X) * 1.05);
+      h.x += (dx / d) * sp * dt; h.y += (dy / d) * sp * dt;
+      h.moving = true; h.walkT += dt * (p.running ? RUN_MULT : 1);
+      h.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+    } else {
+      h.moving = false; h.walkT = 0;
+      if (!p.sitting && Math.abs(p.x - h.x) > 3) h.facing = p.x > h.x ? 'right' : 'left';
+    }
   }
 
   // J sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
@@ -745,11 +800,13 @@ export class TitleScene {
       this.gameT += dt;
       if (this.focus > 0) this.focus = Math.max(0, this.focus - dt / 1.8);
       this.frontAlpha = Math.max(0, Math.min(1, 1 - (this.gameT - 0.55) / 0.9));
-      if (input) {
+      if (input && !this.busy) {
         this.movePlayer(dt, input);
         this.nearProp = this.findNearProp();
         if (input.take(ACTION) && this.nearProp) this.poke(this.nearProp);
       }
+      this.zoom += (this.zoomTarget - this.zoom) * (1 - Math.exp(-4 * dt));
+      this.updateFollower(dt);
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
       this.updateDragon(dt);
       this.updateStorm(dt);
@@ -857,6 +914,15 @@ export class TitleScene {
         : this.dragonImgs.fly[Math.floor(this.t / 0.14) & 1];
       const dx = Math.round(d.x) - cam, dy = Math.round(d.y);
       if (dx < VW && dx + DRAGON.w > 0) items.push({ baseY: d.state === 'fly' ? 9999 : DRAGON.baseY, draw: () => ctx.drawImage(img, dx, dy) });
+    }
+    if (withPlayer && this.him.active) {
+      const h = this.him;
+      const set = this.himSprites[h.facing];
+      const i = Math.floor(h.walkT / 0.13) % set.walk.length;
+      const img = h.moving ? set.walk[i] : set.idle[0];
+      const bob = h.moving && (i & 1) ? -1 : 0;
+      const hx = Math.round(h.x) - cam, hy = Math.round(h.y) + bob;
+      items.push({ baseY: h.y + HIM_H - 1, draw: () => { ctx.drawImage(this.girlShadow, hx, hy - bob + HIM_H - 2); ctx.drawImage(img, hx, hy); } });
     }
     if (withPlayer) {
       const p = this.player;
@@ -1044,6 +1110,17 @@ export class TitleScene {
         crisp.fillRect(st.x, st.y, 1, 1);
       }
     }
+    // Acercamiento a la banca: la capa nítida se vuelve a dibujar ampliada
+    // (escala entera cuando llega a 2×, así el píxel sigue nítido).
+    if (this.zoom > 1.01) {
+      const z = this.zoom, sw = VW / z, sh = VH / z;
+      const cx = BENCH.x + 4 - cam, cy = BENCH.baseY - 16;
+      const sx = Math.max(0, Math.min(VW - sw, cx - sw / 2)), sy = Math.max(0, Math.min(VH - sh, cy - sh / 2));
+      crisp.drawImage(crisp.canvas, sx, sy, sw, sh, 0, 0, VW, VH);
+      this.zoomBox = [sx / 4, sy / 4, sw / 4, sh / 4];
+    } else {
+      this.zoomBox = null;
+    }
     crisp.globalAlpha = 1 - night * 0.8;
     crisp.drawImage(this.overlay, 0, 0);
     crisp.globalAlpha = 1;
@@ -1102,7 +1179,15 @@ export class TitleScene {
     haze.fillStyle = `rgba(255,246,200,${(0.06 + 0.05 * (1 - pulse)).toFixed(3)})`;
     haze.beginPath(); haze.moveTo(18, -2); haze.lineTo(26, -2); haze.lineTo(70, 45); haze.lineTo(58, 45); haze.closePath(); haze.fill();
     haze.globalAlpha = 1;
+    if (this.zoomBox) {
+      const [sx, sy, sw, sh] = this.zoomBox;
+      haze.drawImage(haze.canvas, sx, sy, sw, sh, 0, 0, SW, SH);
+    }
   }
+}
+
+function toCanvasesJ(d: DirSprites): DirCanvases {
+  return { idle: d.idle.map((f) => f.toCanvas()), walk: d.walk.map((f) => f.toCanvas()) };
 }
 
 function drawButterfly(ctx: CanvasRenderingContext2D, x: number, y: number, open: boolean): void {
@@ -1487,7 +1572,7 @@ function renderLamp(lit: number): HTMLCanvasElement {
 }
 
 // Banca grande de madera, con Jhammil sentado en el lado derecho, mirando a la izquierda.
-function renderBench(him: PixelBuffer): HTMLCanvasElement {
+function renderBench(him: PixelBuffer | null): HTMLCanvasElement {
   const pb = new PixelBuffer(48, 33);
   pb.ellipse(24, 31, 23, 1, hex(C.shadow, 60));
   const light = hex('#b58f68'), wood = hex('#95724f'), dark = hex('#5f4a3c');
@@ -1499,7 +1584,7 @@ function renderBench(him: PixelBuffer): HTMLCanvasElement {
   pb.rect(2, 20, 44, 3, light); pb.rect(2, 23, 44, 1, wood);
   pb.rect(4, 24, 3, 7, dark); pb.rect(41, 24, 3, 7, dark);
   pb.rect(4, 26, 40, 1, dark);
-  pb.blit(him, 27, 5);
+  if (him) pb.blit(him, 27, 5);
   return pb.toCanvas();
 }
 

@@ -100,7 +100,13 @@ export function mountGate(root: HTMLElement, iconUrl: string, onUnlocked: () => 
   }
 }
 
+export function clearCaptions(root: HTMLElement): void {
+  root.querySelectorAll('.caption').forEach((el) => el.remove());
+}
+
+// Una sola ayuda a la vez: la nueva reemplaza a la anterior.
 export function showCaption(root: HTMLElement, text: string, ms?: number): void {
+  clearCaptions(root);
   const p = document.createElement('p');
   p.className = 'caption';
   p.textContent = text;
