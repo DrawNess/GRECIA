@@ -77,8 +77,9 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      de madera onduladas con ramitas y hojas; bordes disueltos en borroso y
      flores flotando — y pueblan la hoja; luego la carta con profundidad
      (fondo borroso lento, borde de lilas en primer plano rápido, flores en
-     el aire): Grecia camina y los párrafos de
-     `story.letter` (DOM, `.letter__p`) aparecen a su paso. La puerta de
+     el aire): Grecia camina y los párrafos de `story.letter` (DOM,
+     `.letter__p`) aparecen de a uno, grandes y centrados, al llegar a su
+     estación (`LETTER_STEP`). La puerta de
      jardín se eliminó: el final es la hoja.
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
    mariposas o pájaros (una vez cada uno). J junto a la banca: sentarse.
@@ -253,6 +254,29 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
 Textos editables: `src/content/story.ts` (nombres; próximamente frases) y
 `src/content/gate.ts` (menú). Las respuestas de la puerta van como sha256:
 `pnpm hash "TEXTO EXACTO"` y pegar el resultado.
+
+## 5b. Dónde cambiar cada texto
+
+Todo texto visible se edita en dos archivos; no hace falta tocar nada más.
+
+| Texto | Archivo → campo |
+|---|---|
+| Título del menú ("Grecia") y subtítulo ("un paseo entre lilas" / "otra vez, con calma") | `src/content/gate.ts` → `title`, `subtitle`, `subtitleAgain` |
+| Pregunta del nombre, placeholder, errores ("Mmm… ese no es…", "Todo en MAYÚSCULAS…") | `gate.ts` → `namePrompt`, `namePlaceholder`, `msgWrongName`, `msgUppercase` |
+| Nombre correcto (como hash) | `gate.ts` → `nameHash` — generar con `pnpm hash "TEXTO EXACTO"` |
+| Pregunta de la fecha, su hash y error | `gate.ts` → `datePrompt`, `dateHash` (vacío = paso desactivado), `msgWrongDate` |
+| Ayudas al pie ("Flechas para caminar…", tormenta, kiosco, tronco, flor, autopista, "Otra vez, con calma.") | `gate.ts` → `moveHint`, `stormHint`, `breakHint`, `shelterHint`, `flowerHint`, `roadHint`, `againHint` |
+| Nombres: Grecia, Jhammil, Chimuelo | `src/content/story.ts` → `herName`, `himName`, `dragonName` |
+| El poema de la banca | `story.ts` → `benchTalk.lines` (una caja por elemento) |
+| La despedida en el verde | `story.ts` → `farewellTalk.lines` |
+| La palabra de la hoja ("plantar") | `story.ts` → `plantWord` |
+| **La carta** | `story.ts` → `letter` (un párrafo corto por elemento; el último es la firma) |
+| "TE AMO MUCHO MUCHO GRECIA" (hecho de flores) | `src/scenes/finale.ts` → `MESSAGE` (solo letras T E A M O U C H G R I y espacio; añadir otra letra = dibujar su glifo 5×7 en `GLYPHS`) |
+
+Cómo se ve la carta: letras grandes, cada párrafo centrado como un poema, uno
+a la vez; aparece cuando Grecia llega a su estación (una cada 250 px) y se
+desvanece al seguir. Ajustes: tamaño en `.letter__p` (`src/style.css`),
+separación en `LETTER_STEP` (`src/scenes/finale.ts`).
 
 ## 6. Pendientes (en orden sugerido)
 

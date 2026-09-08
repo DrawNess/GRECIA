@@ -43,6 +43,9 @@ const GLYPHS: Record<string, string[]> = {
 const MESSAGE = ['TE AMO', 'MUCHO MUCHO', 'GRECIA'];
 const CELL = 4, ADV = 7 * CELL, LINE_TOPS = [12, 60, 108];
 
+// La carta: primera estación y separación entre párrafos (px de mundo).
+const LETTER_START = 110, LETTER_STEP = 250;
+
 const MARKER_ROWS = [
   '.OOOOOOO.', 'OWWWWWWWO', 'OWZZZZZWO', 'OWWWWZWWO', 'OWWWWZWWO', 'OWZWWZWWO', 'OWWZZZWWO', 'OWWWWWWWO', '.OOOOOOO.', '....O....',
 ];
@@ -75,7 +78,8 @@ export class FinaleScene {
   private readonly word: HTMLElement;
   private wordTimer = 0;
   private readonly letterBox: HTMLElement;
-  private readonly paragraphs: { el: HTMLElement; x: number; shown: boolean }[] = [];
+  // Cada párrafo tiene su "estación" en la hoja: se ve, centrado, cuando Grecia está cerca.
+  private readonly paragraphs: { el: HTMLElement; x: number }[] = [];
   private letterLen = 0;
 
   constructor(root: HTMLElement) {
@@ -104,10 +108,11 @@ export class FinaleScene {
       const el = document.createElement('p');
       el.className = 'letter__p' + (i === story.letter.length - 1 ? ' letter__p--sign' : '');
       el.textContent = text;
+      el.style.opacity = '0';
       this.letterBox.appendChild(el);
-      this.paragraphs.push({ el, x: 60 + i * 300, shown: false });
+      this.paragraphs.push({ el, x: LETTER_START + i * LETTER_STEP });
     });
-    this.letterLen = 60 + story.letter.length * 300 + 40;
+    this.letterLen = LETTER_START + story.letter.length * LETTER_STEP + 40;
 
     // Flores de verdad, pre-dibujadas: varias tallas y giros para las letras,
     // racimitos pálidos para el fondo, hojas para las ramas.
@@ -252,10 +257,13 @@ export class FinaleScene {
       } else this.walkT = 0;
       const target = Math.min(this.letterLen - VW, Math.max(0, this.px + GIRL_W / 2 - VW / 2));
       this.camX += (target - this.camX) * (1 - Math.exp(-5 * dt));
+      // Un párrafo a la vez: aparece al llegar a su estación y se va al seguir.
+      const gx = this.px + GIRL_W / 2;
       for (const p of this.paragraphs) {
-        const sx = p.x - this.camX;
-        p.el.style.left = `calc(${sx.toFixed(1)} * var(--u))`;
-        if (!p.shown && sx < VW - 40) { p.shown = true; p.el.classList.add('is-shown'); }
+        const d = Math.abs(gx - p.x);
+        const a = Math.max(0, Math.min(1, 1 - (d - 70) / 55));
+        p.el.style.opacity = a.toFixed(3);
+        p.el.style.transform = `translate(-50%, ${((1 - a) * 3).toFixed(1)}px)`;
       }
     }
   }

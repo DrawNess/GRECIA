@@ -1,11 +1,18 @@
-// Personajes y textos del paseo. Aquí es donde se editan los nombres y frases.
-// Cada elemento de `lines` es una caja de diálogo; los saltos de línea se respetan.
+// ═══════════════════════════════════════════════════════════════════════════
+// TEXTOS DEL PASEO. Todo lo que dice el juego durante el recorrido está aquí.
+// (Los del menú y las ayudas están en gate.ts.) Los saltos de línea (\n) se
+// respetan tal cual en pantalla.
+// ═══════════════════════════════════════════════════════════════════════════
 export const story = {
+  // Nombres. `himName` aparece en la etiqueta sobre él en la banca y como
+  // quien habla en las cajas de diálogo. `dragonName`, sobre Chimuelo al despertar.
   herName: 'Grecia',
   himName: 'Jhammil',
   dragonName: 'Chimuelo',
 
-  // En la banca, al sentarse con él.
+  // LA BANCA. Al sentarse con él: cada elemento es una caja de diálogo
+  // (máquina de escribir; J o Enter pasa a la siguiente). Al terminar se paran
+  // y él la acompaña de la mano.
   benchTalk: {
     who: 'Jhammil',
     lines: [
@@ -18,7 +25,7 @@ export const story = {
     ],
   },
 
-  // En el verde, donde Jhammil la deja seguir sola.
+  // LA DESPEDIDA. En el verde de Santa Cruz, donde él la deja seguir sola.
   farewellTalk: {
     who: 'Jhammil',
     lines: [
@@ -27,14 +34,17 @@ export const story = {
     ],
   },
 
-  // El final. La palabra del centro de la hoja, y la carta: un párrafo por
-  // elemento; Grecia camina por la hoja y van apareciendo a su paso. El
-  // último párrafo es la firma.
+  // EL FINAL. La palabra en el centro de la hoja de pergamino (J la planta).
   plantWord: 'plantar',
+
+  // LA CARTA. Un párrafo por elemento. Se muestran de a uno, grandes y
+  // centrados como un poema, cuando Grecia llega a la altura de cada uno
+  // (uno cada 250 px de caminata; ida y vuelta lo vuelve a mostrar).
+  // Conviene que sean cortos (2–4 líneas). El último es la firma.
   letter: [
-    '(Aquí empieza la carta. Jhammil la escribe hoy; cada elemento de esta lista es un párrafo.)',
-    '(Segundo párrafo de ejemplo. Puede ser largo: la caja se ajusta.)',
-    '(Tercer párrafo de ejemplo.)',
-    'Te amo mucho mucho, Grecia.\n— Jhammil',
+    'Aquí empieza la carta.\n(Jhammil la escribe hoy.)',
+    'Cada elemento de esta lista\nes un párrafo corto.',
+    'Aparecen uno a uno,\ncentrados, mientras ella camina.',
+    'Te amo mucho mucho,\nGrecia.\n— Jhammil',
   ],
 };

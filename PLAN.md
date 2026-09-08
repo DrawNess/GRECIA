@@ -113,7 +113,8 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   disuelven en borroso (ensueño) y flotan flores en el aire. Luego la hoja
   se renueva y empieza **la carta**, con profundidad: racimos pálidos y
   borrosos al fondo (lentos), la hoja con los párrafos de `story.letter`
-  apareciendo al paso de Grecia (uno cada 300 px; el último es la firma), un
+  (cortos, grandes, centrados como poema, de a uno cada 250 px; el último
+  es la firma), un
   **borde de lilas** arriba y abajo en primer plano (más rápido) y flores
   flotando en dos profundidades. Jhammil escribe la carta; hoy hay relleno.
 - Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.
@@ -137,6 +138,12 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   golpe de viento deshace el racimo del frente (flores y pétalos vuelan hacia
   la izquierda por delante de la cámara) y Grecia queda bajo control en el
   mismo escenario (flechas / WASD).
+
+## Dónde cambiar cada texto
+
+Tabla completa en `docs/CONTEXTO.md` §5b. En corto: menú y ayudas en
+`src/content/gate.ts`; poema, despedida, "plantar" y la carta en
+`src/content/story.ts`.
 
 ## Traspaso
 
