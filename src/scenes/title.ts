@@ -19,8 +19,9 @@ const GREEN = { x0: 2230, x1: 2560 };
 const smooth = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k); };
 const nightAt = (x: number) => smooth((x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM)) * (1 - smooth((x - GREEN.x0) / (GREEN.x1 - GREEN.x0)));
 const greenAt = (x: number) => smooth((x - GREEN.x0) / (GREEN.x1 - GREEN.x0));
-// Donde Jhammil la deja seguir sola.
+// Donde Jhammil la deja seguir sola, y donde todo se disuelve en la hoja.
 const FAREWELL_X = 2660;
+const END_X = 2850;
 // La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
 // x0..x1 pavimento · wallX0..wallX1 la pared · house su casa · streetX0..x1 la calle que entra
 const STREET = { x0: 600, wallX0: 612, wallX1: 986, house: 996, streetX0: 1040, x1: 1096, wallTop: 92, pole: 1064 };
@@ -151,6 +152,7 @@ export class TitleScene {
   private readonly him: Follower = { active: false, x: 0, y: 0, facing: 'left', moving: false, walkT: 0, side: 1, holding: false, everHeld: false, waving: 0, stayed: false };
   private readonly waveImgs: HTMLCanvasElement[];
   private farewellDone = false;
+  private endingT = -1; // fundido a pergamino al final del verde
   private readonly parrots: Parrot[] = [];
   private nextParrot = 4;
   private zoom = 1;
@@ -262,7 +264,7 @@ export class TitleScene {
     this.benchEmpty = renderBench(null);
     const hr = toCanvasesJ(JHAMMIL.side);
     this.himSprites = { up: toCanvasesJ(JHAMMIL.back), down: toCanvasesJ(JHAMMIL.front), right: hr, left: { idle: hr.idle.map(flipX), walk: hr.walk.map(flipX) } };
-    this.addProp('gate', renderGate(rng), 2884, 160, 16, { hw: 15, depth: 4 });
+    void renderGate;
     // El verde cruceño: palmeras, toborochis, tajibo y plátanos.
     for (const [x, baseY] of [[2330, 156], [2470, 178], [2598, 154], [2790, 176]] as Pt[]) this.addProp('palm', renderPalm(rng), x, baseY, 4, { hw: 3, depth: 3 });
     for (const [x, baseY] of [[2400, 160], [2720, 155]] as Pt[]) this.addProp('toborochi', renderToborochi(rng), x, baseY, 6, { hw: 5, depth: 3 });
@@ -964,6 +966,12 @@ export class TitleScene {
       this.updateStorm(dt);
       this.updateHighway(dt);
       this.updateFarewell(dt);
+      if (this.endingT < 0 && this.player.x + GIRL_W / 2 >= END_X && !this.busy) this.endingT = 0;
+      if (this.endingT >= 0) {
+        this.endingT += dt;
+        if (this.endingT > 0.6) { this.player.moving = false; this.player.stun = 99; }
+        if (this.endingT > 2.6) { this.endingT = 99; this.events.push('finale'); }
+      }
       this.updateParrots(dt);
       this.updateNightLife(dt);
       this.updateCritters(dt);
@@ -1308,6 +1316,10 @@ export class TitleScene {
     crisp.globalAlpha = 1 - night * 0.8;
     crisp.drawImage(this.overlay, 0, 0);
     crisp.globalAlpha = 1;
+    if (this.endingT >= 0) {
+      crisp.fillStyle = `rgba(236,223,196,${Math.min(1, this.endingT / 2.4).toFixed(3)})`;
+      crisp.fillRect(0, 0, VW, VH);
+    }
 
     // Capa de niebla: flores fuera de foco, bancos de bruma y rayos de sol.
     haze.clearRect(0, 0, SW, SH);

@@ -101,7 +101,16 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   en la tormenta, pájaros de día, grillos de noche; efectos al golpear y
   romper troncos, crujido y golpe del árbol, Chimuelo, corazones, arbustos.
   Botón ♪ arriba a la derecha y tecla M para silenciar (se recuerda).
-- Puerta de jardín cerrada al final (meta, placeholder).
+- **El final** (`scenes/finale.ts`): al pasar x 2850 todo se funde en una
+  hoja de pergamino. Grecia está en el centro con su flor y arriba dice
+  **"plantar"** (`story.plantWord`); con J la planta (la flor baja a la
+  tierra, chispas). Del brote crecen ramas por toda la hoja, brotan hojas y
+  las flores aparecen en oleada desde la planta formando **"TE AMO / MUCHO
+  MUCHO / GRECIA"** con letras de 5×7 hechas de lilas, mientras el resto de
+  la hoja se puebla de lilas pálidas (~12 s, con chispas por línea). Luego la
+  hoja se renueva y empieza **la carta**: Grecia camina por la hoja y los
+  párrafos de `story.letter` aparecen a su paso (uno cada 300 px; el último es
+  la firma). Jhammil escribe la carta; hoy hay párrafos de relleno.
 - Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.
 
 ## Menú (etapa 0)

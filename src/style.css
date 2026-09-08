@@ -50,6 +50,7 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  overflow: hidden; /* la carta se desplaza: nada se sale de la hoja */
 }
 
 #veil {
@@ -246,6 +247,38 @@ body {
   animation: arrow 0.9s ease-in-out infinite;
 }
 @keyframes arrow { 50% { transform: translateY(calc(-1 * var(--u))); } }
+
+/* ── El final: la hoja ── */
+.finale-word {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(52 * var(--u));
+  text-align: center;
+  font-family: 'Pixelify Sans', 'DotGothic16', monospace;
+  font-size: calc(14 * var(--u));
+  letter-spacing: calc(0.5 * var(--u));
+  color: var(--lilac-4);
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  pointer-events: none;
+}
+.finale-word.is-shown { opacity: 1; }
+.letter { position: absolute; inset: 0; pointer-events: none; }
+.letter__p {
+  position: absolute;
+  top: calc(24 * var(--u));
+  width: calc(250 * var(--u));
+  margin: 0;
+  font-size: calc(6 * var(--u));
+  line-height: 1.5;
+  color: #4a3a2e;
+  white-space: pre-line;
+  opacity: 0;
+  transform: translateY(calc(2 * var(--u)));
+  transition: opacity 1.2s ease, transform 1.2s ease;
+}
+.letter__p.is-shown { opacity: 1; transform: none; }
+.letter__p--sign { font-family: 'Pixelify Sans', 'DotGothic16', monospace; font-size: calc(8 * var(--u)); color: var(--lilac-4); }
 
 /* ── Texto al desbloquear ── */
 .caption {

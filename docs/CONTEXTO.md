@@ -69,7 +69,13 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      se queda despidiéndola (`him.stayed`, `JHAMMIL_WAVE`); Grecia sigue sola.
      La idea de Jhammil: no siempre estará con ella, pero la acompañará a
      donde vaya.
-   - Puerta de jardín cerrada al final (meta provisional).
+   - **El final** (`scenes/finale.ts`, escena aparte a la que main cambia
+     con el evento `finale`): fundido a pergamino; "plantar" (J planta la
+     flor); del brote crecen ramas, hojas y flores que forman "TE AMO MUCHO
+     MUCHO GRECIA" (letras 5×7 de lilas; `GLYPHS`, `MESSAGE`, `LINE_TOPS`)
+     y pueblan la hoja; luego la carta: Grecia camina y los párrafos de
+     `story.letter` (DOM, `.letter__p`) aparecen a su paso. La puerta de
+     jardín se eliminó: el final es la hoja.
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
    mariposas o pájaros (una vez cada uno). J junto a la banca: sentarse.
 5. Sprites de Grecia en tres direcciones con caminata de 4 cuadros; sprites
@@ -106,7 +112,8 @@ src/engine/save.ts         localStorage (progreso, silencio)
 src/engine/audio.ts        sonido por código (WebAudio): ambientes y efectos
 src/art/palette.ts         TODOS los colores, con nombre
 src/art/sprites.ts         Grecia (3 vistas, caminata, sentada), Jhammil sentado, ramita
-src/scenes/title.ts        LA escena: menú + mundo + objetos + animaciones (≈1200 líneas)
+src/scenes/title.ts        LA escena: menú + mundo + objetos + animaciones
+src/scenes/finale.ts       el final: pergamino, plantar, mensaje de lilas, la carta
 src/ui/gate.ts             panel de nombre/fecha (DOM), ayudas (una a la vez)
 src/ui/dialog.ts           caja de diálogo con máquina de escribir (J/Enter pasa)
 src/content/gate.ts        textos y hashes de la puerta
@@ -231,6 +238,9 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   redacción de esa idea; Jhammil puede cambiarlas.
 - **La autopista** (2026-09-08): minijuego de cruzar de noche esquivando
   autos; si los pisan, reinician desde la banca (pedido de Jhammil).
+- **El final** (2026-09-08, idea de Jhammil): la hoja de pergamino, "plantar",
+  la lila que crece formando "TE AMO MUCHO MUCHO GRECIA" poblando todo,
+  y la carta larga por la que Grecia camina. Debe ser cinematográfico.
 - **La flor de lila**: la recompensa de la tormenta; Grecia la lleva en la
   mano y la usará para abrir una puerta al final del tramo (Jhammil lo
   explicará después).
@@ -246,9 +256,10 @@ Textos editables: `src/content/story.ts` (nombres; próximamente frases) y
 2. **Fecha** de la segunda validación (Jhammil aún no la dio): generar
    `dateHash` con `pnpm hash "DD/MM/AAAA"` y pegarlo en `gate.ts`; el paso
    ya está programado y se activa solo.
-3. Más recuerdos / lugares si los hay; qué pasa en la puerta final.
-4. **Carta final** cifrada (AES-GCM, WebCrypto) con la clave del QR; pantalla
-   con máquina de escribir; botón para responder (WhatsApp).
+3. **La carta**: pegar los párrafos reales en `story.letter` (Jhammil la
+   escribe); revisar longitud y ritmo caminando.
+4. Cifrar la carta (AES-GCM, WebCrypto) con la clave del QR para que no
+   quede en texto plano en el repo público; botón para responder (WhatsApp).
 5. **QR**: la URL de Pages con `#k=TOKEN`; tarjeta "ábrelo en la compu" si
    se abre en un celular (hoy en móvil se ve diminuto).
 6. Música opcional (canción que pase Jhammil); los sonidos ambientales ya están.

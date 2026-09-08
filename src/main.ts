@@ -11,7 +11,8 @@ import { loadSave } from './engine/save';
 import { startLoop } from './engine/loop';
 import { writeSave, resetSave } from './engine/save';
 import { TitleScene } from './scenes/title';
-import { mountGate, showCaption } from './ui/gate';
+import { FinaleScene } from './scenes/finale';
+import { mountGate, showCaption, clearCaptions } from './ui/gate';
 import { showDialog } from './ui/dialog';
 import { story } from './content/story';
 import { gate } from './content/gate';
@@ -25,6 +26,8 @@ if (location.hash === '#reset') {
 const stage = new Stage();
 const scene = new TitleScene();
 const input = new Input();
+// La escena activa: el paseo, y al final la hoja de pergamino.
+let active: TitleScene | FinaleScene = scene;
 
 // Sonido: arranca con el primer gesto (teclado o clic). M lo silencia.
 const audio = new GameAudio();
@@ -64,10 +67,11 @@ tagEl.hidden = true;
 stage.ui.appendChild(tagEl);
 
 const step = (dt: number) => {
-  scene.update(dt, input);
+  active.update(dt, input);
   input.endFrame();
-  audio.update(dt, scene.ambience());
-  for (const e of scene.takeEvents()) {
+  audio.update(dt, active.ambience());
+  for (const e of active.takeEvents()) {
+    if (e === 'finale') { clearCaptions(stage.ui); active = new FinaleScene(stage.ui); tagEl.hidden = true; continue; }
     if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
     else if (e === 'break') showCaption(stage.ui, gate.breakHint, 6000);
     else if (e === 'shelter') showCaption(stage.ui, gate.shelterHint, 5000);
@@ -110,8 +114,8 @@ function backToMenu(): void {
   setTimeout(() => { location.hash = '#again'; location.reload(); }, 850);
 }
 const draw = () => {
-  scene.render(stage.crisp, stage.soft, stage.haze);
-  const tag = scene.nameTag();
+  active.render(stage.crisp, stage.soft, stage.haze);
+  const tag = active.nameTag();
   if (tag) {
     tagEl.textContent = tag.text;
     tagEl.style.left = `calc(${tag.x} * var(--u))`;
@@ -123,7 +127,7 @@ startLoop(step, draw);
 
 // Gancho de depuración solo en local: permite avanzar la simulación a mano.
 if (import.meta.env.DEV || location.hostname === 'localhost') {
-  (window as unknown as { __grecia: unknown }).__grecia = { scene, stage, input, audio, tick: (dt: number) => { step(dt); draw(); } };
+  (window as unknown as { __grecia: unknown }).__grecia = { scene, stage, input, audio, get active() { return active; }, tick: (dt: number) => { step(dt); draw(); } };
 }
 
 function enterGame(showHint: boolean): void {

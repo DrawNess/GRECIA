@@ -26,4 +26,15 @@ export const story = {
       'Sigue. Yo te miro desde aquí.',
     ],
   },
+
+  // El final. La palabra del centro de la hoja, y la carta: un párrafo por
+  // elemento; Grecia camina por la hoja y van apareciendo a su paso. El
+  // último párrafo es la firma.
+  plantWord: 'plantar',
+  letter: [
+    '(Aquí empieza la carta. Jhammil la escribe hoy; cada elemento de esta lista es un párrafo.)',
+    '(Segundo párrafo de ejemplo. Puede ser largo: la caja se ajusta.)',
+    '(Tercer párrafo de ejemplo.)',
+    'Te amo mucho mucho, Grecia.\n— Jhammil',
+  ],
 };
