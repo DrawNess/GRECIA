@@ -2049,7 +2049,7 @@ function paintGreenHills(pb: PixelBuffer, rng: Rng, width: number, night: boolea
 
 // Palmeras lejanas en la capa media, en vez de los árboles de lila.
 function paintDistantPalms(pb: PixelBuffer, rng: Rng, width: number): void {
-  const start = 88 + PAR_MID * GREEN.x0 + 20;
+  const start = Math.round(88 + PAR_MID * GREEN.x0) + 20;
   for (let x = start + rng.int(30); x < width; x += 44 + rng.int(50)) {
     const k = 0.45 + rng.next() * 0.15, h = 18 + rng.int(12), top = HORIZON - h;
     for (let y = top; y < HORIZON + 2; y++) { const tx = x + Math.round(Math.sin((y - top) * 0.12) * 2); pb.set(tx, y, fogged(C.palmTrunkDark, k)); pb.set(tx + 1, y, fogged(C.palmTrunk, k)); }

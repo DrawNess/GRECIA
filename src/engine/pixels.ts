@@ -22,6 +22,8 @@ export class PixelBuffer {
   }
 
   set(x: number, y: number, c: RGBA): void {
+    // Coordenadas enteras siempre: un x fraccionario desalinearía los canales.
+    x = Math.round(x); y = Math.round(y);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const i = (y * this.w + x) * 4;
     const d = this.data;
