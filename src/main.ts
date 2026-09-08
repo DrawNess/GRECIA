@@ -6,6 +6,8 @@ import './style.css';
 
 import { Stage } from './engine/stage';
 import { Input } from './engine/input';
+import { GameAudio } from './engine/audio';
+import { loadSave } from './engine/save';
 import { startLoop } from './engine/loop';
 import { writeSave, resetSave } from './engine/save';
 import { TitleScene } from './scenes/title';
@@ -21,6 +23,22 @@ if (location.hash === '#reset') {
 const stage = new Stage();
 const scene = new TitleScene();
 const input = new Input();
+
+// Sonido: arranca con el primer gesto (teclado o clic). M lo silencia.
+const audio = new GameAudio();
+audio.muted = loadSave().muted ?? false;
+const wake = () => audio.ensure();
+window.addEventListener('keydown', wake);
+window.addEventListener('pointerdown', wake);
+const muteBtn = document.createElement('button');
+muteBtn.className = 'mute';
+muteBtn.type = 'button';
+const paintMute = () => { muteBtn.textContent = audio.muted ? '♪ off' : '♪'; muteBtn.title = audio.muted ? 'Activar sonido (M)' : 'Silenciar (M)'; };
+const toggleMute = () => { audio.setMuted(!audio.muted); writeSave({ muted: audio.muted }); paintMute(); };
+muteBtn.addEventListener('click', () => { audio.ensure(); toggleMute(); });
+window.addEventListener('keydown', (e) => { if (e.code === 'KeyM' && (e.target as HTMLElement).tagName !== 'INPUT') toggleMute(); });
+paintMute();
+stage.ui.appendChild(muteBtn);
 
 // Entrada en fundido desde crema (setTimeout: no depende de que rAF esté activo).
 const veil = document.getElementById('veil')!;
@@ -46,10 +64,20 @@ stage.ui.appendChild(tagEl);
 const step = (dt: number) => {
   scene.update(dt, input);
   input.endFrame();
+  audio.update(dt, scene.ambience());
   for (const e of scene.takeEvents()) {
     if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
     else if (e === 'break') showCaption(stage.ui, gate.breakHint, 5000);
     else if (e === 'caught') backToMenu();
+    else if (e.startsWith('sfx:thunder')) audio.thunder(Number(e.split(':')[2] ?? 1));
+    else if (e === 'sfx:hit') audio.hit();
+    else if (e === 'sfx:crack') audio.crack();
+    else if (e === 'sfx:creak') audio.creak();
+    else if (e === 'sfx:thud') audio.thud();
+    else if (e === 'sfx:purr') audio.purr();
+    else if (e === 'sfx:twinkle') audio.twinkle();
+    else if (e === 'sfx:flutter') audio.flutter();
+    else if (e === 'sfx:rustle') audio.rustle();
   }
 };
 
@@ -73,7 +101,7 @@ startLoop(step, draw);
 
 // Gancho de depuración solo en local: permite avanzar la simulación a mano.
 if (import.meta.env.DEV || location.hostname === 'localhost') {
-  (window as unknown as { __grecia: unknown }).__grecia = { scene, stage, input, tick: (dt: number) => { step(dt); draw(); } };
+  (window as unknown as { __grecia: unknown }).__grecia = { scene, stage, input, audio, tick: (dt: number) => { step(dt); draw(); } };
 }
 
 function enterGame(showHint: boolean): void {

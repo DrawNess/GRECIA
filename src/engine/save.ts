@@ -3,6 +3,7 @@ const KEY = 'grecia:v1';
 
 export interface Save {
   unlocked?: boolean;
+  muted?: boolean;
 }
 
 export function loadSave(): Save {

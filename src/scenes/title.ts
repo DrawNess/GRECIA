@@ -68,6 +68,8 @@ interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT:
 // Luz nocturna (mundo): farol o ventana; brilla según lo oscuro que esté ahí.
 interface Light { x: number; y: number; r: number; col: string; a: number }
 interface Star { x: number; y: number; ph: number }
+interface Firefly { x: number; y: number; vx: number; vy: number; ph: number }
+interface Meteor { x: number; y: number; vx: number; vy: number; t: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
 
 const PETAL_COLS = [C.lilac, C.lilacLight, C.lilacMid, C.lilacPale];
@@ -112,6 +114,9 @@ export class TitleScene {
   private caught = false;
   private breakSeen = false;
   private readonly strikes: Strike[] = [];
+  private readonly fireflies: Firefly[] = [];
+  private meteor: Meteor | null = null;
+  private nextMeteor = 9;
   private nextStrike = 3;
   private readonly events: string[] = [];
   private camX = 0;
@@ -279,8 +284,15 @@ export class TitleScene {
     void rng;
   }
 
-  /** Avisos para la interfaz (ayudas), se consumen al leerlos. */
+  /** Avisos para la interfaz (ayudas, sonidos), se consumen al leerlos. */
   takeEvents(): string[] { return this.events.splice(0); }
+
+  /** Qué se oye: día, noche y tormenta (0..1) donde está la cámara. */
+  ambience(): { day: number; night: number; storm: number } {
+    const n = this.mode === 'game' ? nightAt(this.camX + VW / 2) : 0;
+    const st = this.mode === 'game' ? stormAt(this.camX + VW / 2) * (1 - 0.85 * (this.broken / BARRIERS.length)) : 0;
+    return { day: 1 - n, night: n, storm: st };
+  }
 
   /** Etiqueta con el nombre de Jhammil (coordenadas de pantalla) cuando ella está cerca de la banca. */
   nameTag(): { text: string; x: number; y: number } | null {
@@ -407,6 +419,7 @@ export class TitleScene {
     if (pr.kind === 'bench') { this.sit(); return; }
     if (pr.kind === 'barrier') { this.hitBarrier(pr); return; }
     pr.shake = 0.5;
+    this.events.push('sfx:rustle');
     const r = this.rng;
     const top = pr.baseY - pr.r * 2;
     for (let i = 0; i < 4; i++) {
@@ -414,6 +427,7 @@ export class TitleScene {
     }
     if (pr.used || pr.secret === 'none') return;
     pr.used = true;
+    this.events.push('sfx:flutter');
     const away = this.player.x + GIRL_W / 2 < pr.cx ? 1 : -1;
     if (pr.secret === 'butterflies') {
       const n = 4 + r.int(4);
@@ -440,10 +454,11 @@ export class TitleScene {
         d.lastZ = this.t;
         this.critters.push({ kind: 'zz', x: d.x + 10, y: d.y + 12, vx: 6, vy: -9, ph: r.range(0, 6.28), t: 0, life: 1.9, col: C.white });
       }
-      if (!this.player.sitting && Math.abs(px - (d.x + DRAGON.w / 2)) < 48) { d.state = 'wake'; d.t = 0; }
+      if (!this.player.sitting && Math.abs(px - (d.x + DRAGON.w / 2)) < 48) { d.state = 'wake'; d.t = 0; this.events.push('sfx:purr'); }
     } else if (d.state === 'wake') {
       if (!d.hearts && d.t > 0.45) {
         d.hearts = true;
+        this.events.push('sfx:twinkle');
         for (let i = 0; i < 8; i++) {
           this.critters.push({ kind: 'heart', x: d.x + 4 + r.range(0, 16), y: d.y + 2 + r.range(0, 8), vx: r.range(-10, 10), vy: -r.range(14, 26), ph: r.range(0, 6.28), t: -r.range(0, 0.6), life: 2.6, col: r.pick(['#f38fb1', '#f7a8c4', '#e86f9a']) });
         }
@@ -459,6 +474,37 @@ export class TitleScene {
     } else if (d.t > 14 && Math.abs(px - DRAGON.x) > 170) {
       d.state = 'sleep'; d.t = 0; d.hearts = false;
       d.x = DRAGON.x; d.y = DRAGON.baseY - DRAGON.h + 3;
+    }
+  }
+
+  // Luciérnagas en el parque de noche (no en la tormenta) y, de vez en cuando,
+  // una estrella fugaz.
+  private updateNightLife(dt: number): void {
+    const r = this.rng;
+    const cx = this.camX + VW / 2;
+    const calm = nightAt(cx) * (1 - stormAt(cx));
+    const want = calm > 0.5 ? 12 : 0;
+    while (this.fireflies.length < want) {
+      this.fireflies.push({ x: this.camX + r.range(0, VW), y: r.range(95, 172), vx: r.range(-6, 6), vy: r.range(-4, 4), ph: r.range(0, 6.28) });
+    }
+    if (want === 0) this.fireflies.length = 0;
+    for (const f of this.fireflies) {
+      f.vx += r.range(-8, 8) * dt; f.vy += r.range(-6, 6) * dt;
+      f.vx = Math.max(-9, Math.min(9, f.vx)); f.vy = Math.max(-6, Math.min(6, f.vy));
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      if (f.y < 90) f.vy = Math.abs(f.vy); if (f.y > 174) f.vy = -Math.abs(f.vy);
+      // Si se queda muy lejos de la cámara, reaparece dentro de la pantalla.
+      if (f.x < this.camX - 30 || f.x > this.camX + VW + 30) { f.x = this.camX + r.range(0, VW); f.y = r.range(95, 172); }
+    }
+    this.nextMeteor -= dt;
+    if (!this.meteor && calm > 0.6 && this.nextMeteor <= 0) {
+      this.meteor = { x: r.range(40, VW - 40), y: r.range(4, 30), vx: r.range(-1, 1) < 0 ? -170 : 170, vy: 70, t: 0 };
+      this.nextMeteor = r.range(12, 26);
+    }
+    if (this.meteor) {
+      const m = this.meteor;
+      m.t += dt; m.x += m.vx * dt; m.y += m.vy * dt;
+      if (m.t > 0.7) this.meteor = null;
     }
   }
 
@@ -479,9 +525,10 @@ export class TitleScene {
     for (let i = 0; i < n; i++) {
       this.critters.push({ kind: 'puff', x: pr.cx + r.range(-7, 7), y: pr.baseY - r.range(4, 34), vx: r.range(-45, 45), vy: r.range(-70, -10), ph: 0, t: 0, life: pr.hp > 0 ? 0.7 : 1.1, col: r.pick(['#6f5c55', '#8a746a', '#3f3430']) });
     }
-    if (pr.hp > 0) { pr.img = pr.variants![3 - pr.hp]; return; }
+    if (pr.hp > 0) { pr.img = pr.variants![3 - pr.hp]; this.events.push('sfx:hit'); return; }
     this.props.splice(this.props.indexOf(pr), 1);
     this.broken++;
+    this.events.push('sfx:crack');
     this.flash = Math.max(this.flash, 0.6);
     if (this.nearProp === pr) this.nearProp = null;
   }
@@ -511,6 +558,7 @@ export class TitleScene {
       }
       pr.t = (pr.t ?? 0) + dt;
       if (pr.tree === 'shake') {
+        if (pr.t - dt <= 0) this.events.push('sfx:creak');
         pr.shake = 0.3;
         if (r.next() < 0.3) this.critters.push({ kind: 'puff', x: pr.cx + r.range(-6, 6), y: pr.baseY - r.range(10, 36), vx: r.range(-15, 15), vy: r.range(-10, 20), ph: 0, t: 0, life: 0.5, col: '#6f5c55' });
         if (pr.t > 1.2) { pr.tree = 'fall'; pr.t = 0; pr.shake = 0; }
@@ -521,6 +569,7 @@ export class TitleScene {
         pr.baseY = 181; pr.y = 181 - pr.img.height + 3; pr.x = pr.cx - (pr.img.width >> 1);
         pr.solid = { hw: 8, depth: 34 };
         this.flash = Math.max(this.flash, 0.35);
+        this.events.push('sfx:thud');
         for (let k = 0; k < 14; k++) this.critters.push({ kind: 'puff', x: pr.cx + r.range(-10, 10), y: r.range(152, 180), vx: r.range(-40, 40), vy: r.range(-45, -5), ph: 0, t: 0, life: 0.7, col: r.pick(['#6f5c55', '#8a746a', '#3f3430']) });
         if (!this.breakSeen) { this.breakSeen = true; this.events.push('break'); }
         const fy = p.y + GIRL_H - 1;
@@ -546,6 +595,7 @@ export class TitleScene {
         pts.push([st.x - this.camX, st.groundY]);
         this.bolt = { pts, t: 0 };
         this.flash = 1;
+        this.events.push('sfx:thunder:1');
         for (let k = 0; k < 10; k++) this.critters.push({ kind: 'puff', x: st.x + r.range(-4, 4), y: st.groundY - 1, vx: r.range(-50, 50), vy: r.range(-60, -10), ph: 0, t: 0, life: 0.5, col: r.pick(['#fff6c8', '#ffe27a']) });
         const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
         if (!this.caught && Math.abs(fx - st.x) < 9 && Math.abs(fy - st.groundY) < 7) this.hurt();
@@ -561,6 +611,7 @@ export class TitleScene {
       while (y < r.range(70, 110)) { x += r.range(-12, 12); y += r.range(10, 18); pts.push([x, y]); }
       this.bolt = { pts, t: 0 };
       this.flash = 1;
+      this.events.push('sfx:thunder:0.6');
       this.nextBolt = r.range(3.5, 8) / Math.max(0.4, intensity);
     }
     if (this.bolt) { this.bolt.t += dt; if (this.bolt.t > 0.16) this.bolt = null; }
@@ -607,6 +658,7 @@ export class TitleScene {
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
       this.updateDragon(dt);
       this.updateStorm(dt);
+      this.updateNightLife(dt);
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
         const f = this.flyers[i];
@@ -664,7 +716,9 @@ export class TitleScene {
     ctx.drawImage(this.far, farX, 0);
     if (n > 0) { ctx.globalAlpha = n; ctx.drawImage(this.farNight, farX, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.mid, -Math.round(this.camX * PAR_MID), 0);
-    const cloudA = 1 - 0.85 * (this.broken / BARRIERS.length);
+    // Las nubes van en la capa media (parallax), así que se atenúan según dónde
+    // está la cámara para no seguir tapando el cielo fuera de la tormenta.
+    const cloudA = (1 - 0.85 * (this.broken / BARRIERS.length)) * Math.min(1, stormAt(this.camX + VW / 2) * 1.6);
     if (cloudA > 0.02) { ctx.globalAlpha = cloudA; ctx.drawImage(this.clouds, -Math.round(this.camX * PAR_MID), 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.world, -cam, 0);
     type Drawable = { baseY: number; draw: () => void };
@@ -837,6 +891,25 @@ export class TitleScene {
     for (const f of this.flyers) {
       if (f.near || this.gameT < f.delay) continue;
       crisp.drawImage(f.img, Math.round(f.x - f.img.width / 2), Math.round(f.y - f.img.height / 2));
+    }
+    // Luciérnagas: un punto verde-amarillo que se enciende y apaga, con halo.
+    for (const f of this.fireflies) {
+      const a = 0.5 + 0.5 * Math.sin(this.t * 2.2 + f.ph);
+      if (a < 0.25) continue;
+      const x = Math.round(f.x) - cam, y = Math.round(f.y);
+      crisp.fillStyle = `rgba(214,255,140,${(0.25 * a).toFixed(3)})`;
+      crisp.fillRect(x - 1, y - 1, 3, 3);
+      crisp.fillStyle = `rgba(232,255,170,${a.toFixed(3)})`;
+      crisp.fillRect(x, y, 1, 1);
+    }
+    // Estrella fugaz: trazo breve con cola que se apaga.
+    if (this.meteor) {
+      const m = this.meteor;
+      const fade = m.t < 0.15 ? m.t / 0.15 : Math.max(0, (0.7 - m.t) / 0.55);
+      for (let i = 0; i < 9; i++) {
+        crisp.fillStyle = `rgba(255,250,235,${(fade * (1 - i / 9) * 0.9).toFixed(3)})`;
+        crisp.fillRect(Math.round(m.x - m.vx * i * 0.012), Math.round(m.y - m.vy * i * 0.012), 1, 1);
+      }
     }
     // Estrellas que parpadean cuando ya es de noche.
     const night = nightAt(this.camX + VW / 2);

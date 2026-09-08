@@ -31,7 +31,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 | 3 | Interacción y guardado: objetos con `J`, diálogos, fragmentos, flags | 🔨 empezado: arbustos con indicador `J`; al pulsar salen mariposas o pájaros (aleatorio, una vez por arbusto). Falta: diálogos, fragmentos, flags |
 | 4 | Puerta + QR: 2ª validación (fecha), token en URL, carta cifrada, tarjeta "ábrelo en la compu", QR | pendiente (falta la fecha) |
 | 5 | Diseño de niveles: escenas y recuerdos (material del autor) | pendiente |
-| 6 | Final y pulido: carta con máquina de escribir, música opcional, QA en PC débil, QR impreso | pendiente |
+| 6 | Final y pulido: carta con máquina de escribir, música opcional, QA en PC débil, QR impreso | 🔨 sonido ambiental y efectos listos (sin música); resto pendiente |
 
 ## Mundo (etapa 1) — el paseo como recuerdo
 
@@ -63,6 +63,12 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 - Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
   soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va
   volando; si ella se aleja un rato, vuelve a dormirse.
+- De noche en el parque (fuera de la tormenta): luciérnagas y, de vez en
+  cuando, una estrella fugaz.
+- **Sonido** generado por código (`engine/audio.ts`): viento, lluvia y truenos
+  en la tormenta, pájaros de día, grillos de noche; efectos al golpear y
+  romper troncos, crujido y golpe del árbol, Chimuelo, corazones, arbustos.
+  Botón ♪ arriba a la derecha y tecla M para silenciar (se recuerda).
 - Puerta de jardín cerrada al final (meta, placeholder).
 - Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.
 

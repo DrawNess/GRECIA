@@ -79,7 +79,8 @@ src/engine/input.ts        teclado: flechas/WASD, J acción, K/Esc cancelar
 src/engine/pixels.ts       PixelBuffer: rasterizador pixel a pixel + sprite() desde texto
 src/engine/rng.ts          aleatorio con semilla (todo el arte es reproducible)
 src/engine/hash.ts         sha256 en JS puro (funciona también en http://)
-src/engine/save.ts         localStorage (progreso)
+src/engine/save.ts         localStorage (progreso, silencio)
+src/engine/audio.ts        sonido por código (WebAudio): ambientes y efectos
 src/art/palette.ts         TODOS los colores, con nombre
 src/art/sprites.ts         Grecia (3 vistas, caminata, sentada), Jhammil sentado, ramita
 src/scenes/title.ts        LA escena: menú + mundo + objetos + animaciones (≈1200 líneas)
@@ -122,6 +123,12 @@ scripts/hash.mjs           `pnpm hash`
 - **Bichos** (`critters`): mariposas, pájaros, pétalos, corazones, "z".
 - **Chimuelo** (`dragon`): estados sleep → wake → fly → gone → sleep.
   Sprites procedimentales en `renderDragon()`.
+- **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
+  hay tormenta; estrella fugaz cada 12–26 s.
+- **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;
+  `update(dt, scene.ambience())` ajusta viento/lluvia/grillos/pájaros; los
+  efectos llegan como eventos `sfx:*` desde la escena (`takeEvents`). M o el
+  botón ♪ silencian; se guarda en `save.muted`.
 - **Tormenta** (`updateStorm`): `stormAt(x)` da la intensidad por posición;
   `broken` (troncos rotos) la reduce. Lluvia en pantalla (`rain`), relámpagos
   ambientales (`bolt` + `flash`), rayos dirigidos (`strikes`: aviso 0,85 s y
@@ -177,7 +184,7 @@ Textos editables: `src/content/story.ts` (nombres; próximamente frases) y
    con máquina de escribir; botón para responder (WhatsApp).
 5. **QR**: la URL de Pages con `#k=TOKEN`; tarjeta "ábrelo en la compu" si
    se abre en un celular (hoy en móvil se ve diminuto).
-6. Música opcional con botón de silencio; sonidos suaves.
+6. Música opcional (canción que pase Jhammil); los sonidos ambientales ya están.
 7. Pruebas en la PC real de ella (rendimiento, teclado, navegador).
 
 ## 7. Despliegue: GitHub Pages (gratis, solo con la cuenta de GitHub)
