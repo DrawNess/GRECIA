@@ -48,6 +48,6 @@ export function showDialog(root: HTMLElement, lines: Line[], onDone: () => void)
   };
   // Con captura y un pequeño retraso: la J que abrió la charla no la pasa.
   setTimeout(() => window.addEventListener('keydown', onKey, true), 250);
-  requestAnimationFrame(() => box.classList.add('is-shown'));
+  setTimeout(() => box.classList.add('is-shown'), 30);
   start();
 }
