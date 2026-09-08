@@ -296,6 +296,16 @@ export const JHAMMIL: { back: DirSprites; front: DirSprites; side: DirSprites } 
   side: { idle: [mkJ(JHAMMIL_S)], walk: jWalk(JHAMMIL_S, jArmSide).map(mkJ) },
 };
 
+// Jhammil despidiéndose: de frente, con el brazo derecho en alto, dos cuadros.
+const waveFrame = (hand: number) => {
+  const r = JHAMMIL_F.slice();
+  put(r, 14, 9, 'W'); put(r, 15, 9, 'W'); put(r, 13, 9, 'W');
+  put(r, 12, 9, 'S'); put(r, 11, 9, 'S'); put(r, 10, 9, 'S'); put(r, 9, 9, 'S');
+  put(r, 8, 9, 'S'); put(r, 7, 9 + hand, 'S'); put(r, 6, 9 + hand, 'S');
+  return r;
+};
+export const JHAMMIL_WAVE = [mkJ(waveFrame(0)), mkJ(waveFrame(1))];
+
 // Ramita de lila (ícono del menú y favicon).
 export const SPRIG = sprite(
   [

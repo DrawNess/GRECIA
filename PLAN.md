@@ -35,7 +35,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 
 ## Mundo (etapa 1) — el paseo como recuerdo
 
-- 2260 px (7 pantallas). Vereda continua abajo; senda curva al árbol grande.
+- 2920 px (9 pantallas). Vereda continua abajo; senda curva al árbol grande.
 - **Día → noche** al caminar a la derecha (x 340–660): el cielo pasa por el
   atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
   faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
@@ -86,6 +86,15 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   cruza de lado a lado cuando no venga ninguno a esa altura. Si un auto pisa
   a Grecia o a Jhammil: bocina, fundido corto y **vuelven a la banca**, de
   pie y de la mano ("Otra vez, con calma.").
+- Tramo 6 (x 2230–2920): **amanece sobre el verde de Santa Cruz**. El
+  cielo pasa del índigo al rosa y al celeste, la ciudad se desvanece detrás
+  de colinas verdes, el pasto se vuelve verde brillante y la vereda tierra
+  colorada; palmeras de motacú, toborochis (tronco de botella, flores
+  rosadas), un tajibo amarillo, plátanos, pasto alto con florcitas y pájaros
+  de colores cruzando el cielo. En x 2660 **Jhammil se detiene**: dos líneas
+  suyas (`story.farewellTalk`, editables), le suelta la mano y **la deja
+  seguir sola**, despidiéndola con la mano (un corazón) y quedándose ahí
+  mirándola. La puerta final está al fondo del verde (x 2884).
 - De noche en el parque (fuera de la tormenta): luciérnagas y, de vez en
   cuando, una estrella fugaz.
 - **Sonido** generado por código (`engine/audio.ts`): viento, lluvia y truenos

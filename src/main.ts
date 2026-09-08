@@ -76,6 +76,7 @@ const step = (dt: number) => {
     else if (e === 'hit:car') backToBench();
     else if (e === 'sfx:whoosh') audio.whoosh();
     else if (e === 'sfx:horn') audio.horn();
+    else if (e === 'talk:farewell') showDialog(stage.ui, story.farewellTalk.lines.map((text) => ({ who: story.farewellTalk.who, text })), () => scene.afterFarewell());
     else if (e === 'talk:bench') showDialog(stage.ui, story.benchTalk.lines.map((text) => ({ who: story.benchTalk.who, text })), () => scene.afterTalk());
     else if (e === 'caught') backToMenu();
     else if (e.startsWith('sfx:thunder')) audio.thunder(Number(e.split(':')[2] ?? 1));

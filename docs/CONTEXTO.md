@@ -27,7 +27,7 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
 2. **Entrada al juego**: el panel se desvanece, la niebla y el desenfoque se
    despejan, un golpe de viento se lleva las flores del frente por delante de
    la cámara, y Grecia queda bajo control.
-3. **Paseo** de 2260 px (7 pantallas) con cámara suave y parallax:
+3. **Paseo** de 2920 px (9 pantallas) con cámara suave y parallax:
    - Tramo 1 (día): el árbol grande, arbustos.
    - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol.
    - Tramo 3 (noche): **la esquina verde** — pared verde, y pegada a ella
@@ -61,6 +61,14 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      cualquiera de los dos → fundido y vuelta a la banca (`respawnAtBench`),
      no al menú. (Jhammil prefirió esta versión a una horizontal tipo
      Frogger, que probamos y descartamos.)
+   - Tramo 6 (x ≥ 2230): **amanece y el paisaje se vuelve verde cruceño**
+     (`greenAt`): colinas verdes tapan la ciudad en la capa lejana,
+     palmeras lejanas en la media, suelo verde y tierra colorada, palmeras,
+     toborochis, tajibo, plátanos, pájaros de colores. En `FAREWELL_X`
+     (2660) Jhammil se detiene, dice `story.farewellTalk`, se sueltan y él
+     se queda despidiéndola (`him.stayed`, `JHAMMIL_WAVE`); Grecia sigue sola.
+     La idea de Jhammil: no siempre estará con ella, pero la acompañará a
+     donde vaya.
    - Puerta de jardín cerrada al final (meta provisional).
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
    mariposas o pájaros (una vez cada uno). J junto a la banca: sentarse.
@@ -156,6 +164,14 @@ scripts/hash.mjs           `pnpm hash`
   se dibujan escalados y ordenados por su base; faros/luces rojas en `haze`.
   Atropello = base del auto a ±6 px de los pies (Grecia o Jhammil) y dentro
   de su ancho → `hit:car` → main funde y llama `respawnAtBench()`.
+- **Amanecer y verde**: `nightAt(x)` sube en 340–660 y baja en `GREEN`
+  (2230–2560); `greenAt(x)` mezcla el suelo (`paintGreenGround`), y las
+  capas lejana/media tienen colinas y palmeras a partir de la x que
+  corresponde al verde según su parallax (`paintGreenHills`,
+  `paintDistantPalms`). Props `palm/toborochi/tajibo/banana`.
+- **Despedida** (`updateFarewell`): al cruzar `FAREWELL_X` con Jhammil
+  activo → `busy`, evento `talk:farewell` → diálogo → `afterFarewell()`:
+  `him.active=false`, `him.stayed=true`, saluda 5 s (`waveImgs`).
 - **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
   hay tormenta; estrella fugaz cada 12–26 s.
 - **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;
@@ -208,6 +224,11 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   futuro contigo…" hasta "…alguien que te elegirá cada día", y el cierre
   "¿Vamos? Te sigo a donde vayas." (editable). Después él la sigue.
 - Tecla de interacción: **J** (decisión de Jhammil). Correr: Shift/K.
+- **El verde de Santa Cruz y la despedida** (2026-09-08): después de la
+  autopista amanece y el paisaje se vuelve verde como Santa Cruz de la
+  Sierra; en un punto Jhammil la deja caminar sola — "no estará siempre con
+  ella pero la acompañará donde vaya". Las líneas de `farewellTalk` son mi
+  redacción de esa idea; Jhammil puede cambiarlas.
 - **La autopista** (2026-09-08): minijuego de cruzar de noche esquivando
   autos; si los pisan, reinician desde la banca (pedido de Jhammil).
 - **La flor de lila**: la recompensa de la tormenta; Grecia la lleva en la

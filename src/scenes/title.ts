@@ -6,15 +6,21 @@ import { PixelBuffer, hex, sprite, type RGBA } from '../engine/pixels';
 import { Rng } from '../engine/rng';
 import { VW, VH, SW, SH } from '../engine/stage';
 import { C } from '../art/palette';
-import { GRECIA, GRECIA_SEATED, JHAMMIL, JHAMMIL_SEATED, SPRIG, type DirSprites } from '../art/sprites';
+import { GRECIA, GRECIA_SEATED, JHAMMIL, JHAMMIL_SEATED, JHAMMIL_WAVE, SPRIG, type DirSprites } from '../art/sprites';
 import { story } from '../content/story';
 import { ACTION, type Input } from '../engine/input';
 
-export const WORLD_W = 2260;
+export const WORLD_W = 2920;
 const HORIZON = 150;
-// De día junto al árbol; al caminar a la derecha cae la noche.
+// De día junto al árbol; al caminar a la derecha cae la noche, y después de
+// la autopista amanece sobre el verde de Santa Cruz.
 const NIGHT_FROM = 340, NIGHT_TO = 660;
-const nightAt = (x: number) => { const t = Math.min(1, Math.max(0, (x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM))); return t * t * (3 - 2 * t); };
+const GREEN = { x0: 2230, x1: 2560 };
+const smooth = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k); };
+const nightAt = (x: number) => smooth((x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM)) * (1 - smooth((x - GREEN.x0) / (GREEN.x1 - GREEN.x0)));
+const greenAt = (x: number) => smooth((x - GREEN.x0) / (GREEN.x1 - GREEN.x0));
+// Donde Jhammil la deja seguir sola.
+const FAREWELL_X = 2660;
 // La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
 // x0..x1 pavimento · wallX0..wallX1 la pared · house su casa · streetX0..x1 la calle que entra
 const STREET = { x0: 600, wallX0: 612, wallX1: 986, house: 996, streetX0: 1040, x1: 1096, wallTop: 92, pole: 1064 };
@@ -67,7 +73,7 @@ interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: s
 interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
 // Objeto en el suelo (coordenadas de mundo). `baseY` decide el orden de dibujo.
 type Secret = 'none' | 'butterflies' | 'birds';
-type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier' | 'kiosk' | 'flower';
+type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier' | 'kiosk' | 'flower' | 'palm' | 'toborochi' | 'tajibo' | 'banana';
 interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number }; hp?: number; variants?: HTMLCanvasElement[]; tree?: TreeState; t?: number; standing?: HTMLCanvasElement }
 // Lluvia (pantalla) y relámpago.
 interface Rain { x: number; y: number; v: number }
@@ -92,7 +98,9 @@ interface Firefly { x: number; y: number; vx: number; vy: number; ph: number }
 interface Meteor { x: number; y: number; vx: number; vy: number; t: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
 // Jhammil cuando la acompaña: camina a su lado, de la mano.
-interface Follower { active: boolean; x: number; y: number; facing: Facing; moving: boolean; walkT: number; side: number; holding: boolean; everHeld: boolean }
+interface Follower { active: boolean; x: number; y: number; facing: Facing; moving: boolean; walkT: number; side: number; holding: boolean; everHeld: boolean; waving: number; stayed: boolean }
+// Pájaro de colores del verde cruceño (pantalla).
+interface Parrot { x: number; y: number; vx: number; ph: number; col: string; col2: string }
 const HIM_H = 26;
 const HAND_GAP = 10; // separación horizontal entre los dos cuando van de la mano
 
@@ -140,7 +148,11 @@ export class TitleScene {
   private readonly carried: HTMLCanvasElement;
   private readonly himSprites: Record<Facing, DirCanvases>;
   private readonly benchEmpty: HTMLCanvasElement;
-  private readonly him: Follower = { active: false, x: 0, y: 0, facing: 'left', moving: false, walkT: 0, side: 1, holding: false, everHeld: false };
+  private readonly him: Follower = { active: false, x: 0, y: 0, facing: 'left', moving: false, walkT: 0, side: 1, holding: false, everHeld: false, waving: 0, stayed: false };
+  private readonly waveImgs: HTMLCanvasElement[];
+  private farewellDone = false;
+  private readonly parrots: Parrot[] = [];
+  private nextParrot = 4;
   private zoom = 1;
   private zoomTarget = 1;
   private busy = false;       // hay una charla abierta: el teclado es de la caja de diálogo
@@ -201,13 +213,16 @@ export class TitleScene {
     const citySeed = rng.int(1e9);
     const far = new PixelBuffer(FAR_W, VH);
     paintCity(far, new Rng(citySeed), FAR_W, false);
+    paintGreenHills(far, new Rng(citySeed + 1), FAR_W, false);
     this.far = far.toCanvas();
     const farN = new PixelBuffer(FAR_W, VH);
     paintCity(farN, new Rng(citySeed), FAR_W, true);
+    paintGreenHills(farN, new Rng(citySeed + 1), FAR_W, true);
     this.farNight = farN.toCanvas();
 
     const mid = new PixelBuffer(MID_W, VH);
     paintDistantTrees(mid, rng, MID_W);
+    paintDistantPalms(mid, rng, MID_W);
     this.mid = mid.toCanvas();
     const clouds = new PixelBuffer(MID_W, 80);
     paintStormClouds(clouds, rng);
@@ -218,6 +233,7 @@ export class TitleScene {
     paintStreet(world, rng);
     paintPuddles(world, rng);
     paintHighway(world, rng);
+    paintGreenGround(world, rng);
     paintCanopyAt(world, rng, dew, 160, 40, 200, 82, 1);
     paintCanopyAt(world, rng, dew, 500, 70, 66, 44, 0.62);
     paintCanopyAt(world, rng, dew, 1768, 64, 72, 48, 0.66);
@@ -246,7 +262,13 @@ export class TitleScene {
     this.benchEmpty = renderBench(null);
     const hr = toCanvasesJ(JHAMMIL.side);
     this.himSprites = { up: toCanvasesJ(JHAMMIL.back), down: toCanvasesJ(JHAMMIL.front), right: hr, left: { idle: hr.idle.map(flipX), walk: hr.walk.map(flipX) } };
-    this.addProp('gate', renderGate(rng), 2232, 160, 16, { hw: 15, depth: 4 });
+    this.addProp('gate', renderGate(rng), 2884, 160, 16, { hw: 15, depth: 4 });
+    // El verde cruceño: palmeras, toborochis, tajibo y plátanos.
+    for (const [x, baseY] of [[2330, 156], [2470, 178], [2598, 154], [2790, 176]] as Pt[]) this.addProp('palm', renderPalm(rng), x, baseY, 4, { hw: 3, depth: 3 });
+    for (const [x, baseY] of [[2400, 160], [2720, 155]] as Pt[]) this.addProp('toborochi', renderToborochi(rng), x, baseY, 6, { hw: 5, depth: 3 });
+    this.addProp('tajibo', renderTajibo(rng), 2540, 158, 4, { hw: 3, depth: 3 });
+    for (const [x, baseY] of [[2290, 176], [2650, 177], [2840, 160]] as Pt[]) this.addProp('banana', renderBanana(rng), x, baseY, 6);
+    this.waveImgs = JHAMMIL_WAVE.map((f) => f.toCanvas());
     // Farolas de la autopista a ambos lados, y el resplandor de la ciudad al fondo.
     for (const t of ROAD_LAMPS) {
       const s = roadS(t), h = Math.round(20 * s) + 6;
@@ -522,6 +544,50 @@ export class TitleScene {
     this.him.x = BENCH.x + 6; this.him.y = BENCH.baseY + 4 - HIM_H + 1; this.him.facing = 'left';
     this.him.side = 1;
     this.nearProp = null;
+  }
+
+  // En el verde, Jhammil se detiene: una línea suya, le suelta la mano y la
+  // deja seguir sola, despidiéndola con la mano mientras se aleja.
+  private updateFarewell(dt: number): void {
+    const h = this.him, p = this.player;
+    if (!this.farewellDone && h.active && p.x + GIRL_W / 2 >= FAREWELL_X && !this.busy) {
+      this.farewellDone = true;
+      this.busy = true;
+      p.moving = false; p.walkT = 0;
+      this.events.push('talk:farewell');
+    }
+    if (h.stayed) {
+      if (h.waving > 0) h.waving -= dt;
+      const r = this.rng;
+      if (h.waving > 2.6 && h.waving < 2.7) this.critters.push({ kind: 'heart', x: h.x + 6, y: h.y + 4, vx: r.range(-4, 4), vy: -14, ph: 0, t: 0, life: 2.2, col: '#f38fb1' });
+    }
+  }
+
+  /** Terminó la despedida: se sueltan, él se queda y ella sigue sola. */
+  afterFarewell(): void {
+    this.busy = false;
+    const h = this.him;
+    h.active = false; h.holding = false; h.stayed = true; h.waving = 5; h.moving = false; h.facing = 'down';
+    this.player.facing = 'right';
+  }
+
+  // Pájaros de colores cruzando el cielo del verde.
+  private updateParrots(dt: number): void {
+    const g = greenAt(this.camX + VW / 2);
+    this.nextParrot -= dt;
+    if (g > 0.4 && this.nextParrot <= 0 && this.parrots.length < 6) {
+      const r = this.rng, dir = r.next() < 0.5 ? 1 : -1;
+      const n = 2 + r.int(3);
+      for (let i = 0; i < n; i++) {
+        this.parrots.push({ x: dir > 0 ? -20 - i * 9 : VW + 20 + i * 9, y: r.range(20, 80) + i * 3, vx: dir * r.range(34, 46), ph: r.range(0, 6.28), col: r.pick(['#2f7fd6', '#e0392b', '#f4d35e']), col2: r.pick(['#f4d35e', '#2f7fd6', '#3aa655']) });
+      }
+      this.nextParrot = r.range(6, 14);
+    }
+    for (let i = this.parrots.length - 1; i >= 0; i--) {
+      const b = this.parrots[i];
+      b.x += b.vx * dt; b.y += Math.sin(this.t * 2 + b.ph) * 6 * dt;
+      if (b.x < -40 || b.x > VW + 40) this.parrots.splice(i, 1);
+    }
   }
 
   // Jhammil camina al lado de Grecia, de la mano: se pone del lado contrario
@@ -897,6 +963,8 @@ export class TitleScene {
       this.updateDragon(dt);
       this.updateStorm(dt);
       this.updateHighway(dt);
+      this.updateFarewell(dt);
+      this.updateParrots(dt);
       this.updateNightLife(dt);
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
@@ -1010,6 +1078,12 @@ export class TitleScene {
       if (dx > VW || dx + w < 0) continue;
       items.push({ baseY: cy, draw: () => ctx.drawImage(c.img, dx, dy, w, h) });
     }
+    if (withPlayer && this.him.stayed) {
+      const h = this.him;
+      const img = h.waving > 0 ? this.waveImgs[Math.floor(this.t / 0.3) & 1] : this.himSprites.down.idle[0];
+      const hx = Math.round(h.x) - cam, hy = Math.round(h.y);
+      if (hx > -20 && hx < VW + 20) items.push({ baseY: h.y + HIM_H - 1, draw: () => { ctx.drawImage(this.girlShadow, hx, hy + HIM_H - 2); ctx.drawImage(img, hx, hy); } });
+    }
     if (withPlayer && this.him.active) {
       const h = this.him;
       const set = this.himSprites[h.facing];
@@ -1122,6 +1196,12 @@ export class TitleScene {
       crisp.fillStyle = b.col;
       drawButterfly(crisp, Math.round(b.x) - cam, Math.round(b.y), Math.sin(this.t * 9 + b.ph) > 0);
     }
+    for (const b of this.parrots) {
+      const x = Math.round(b.x), y = Math.round(b.y), up = Math.sin(this.t * 10 + b.ph) > 0;
+      crisp.fillStyle = b.col; crisp.fillRect(x - 2, y, 5, 1); crisp.fillRect(x + (b.vx > 0 ? 3 : -3), y, 1, 1);
+      crisp.fillStyle = b.col2; crisp.fillRect(x - 2, up ? y - 1 : y + 1, 2, 1); crisp.fillRect(x + 1, up ? y - 1 : y + 1, 2, 1);
+      crisp.fillStyle = '#f4efe6'; crisp.fillRect(x + (b.vx > 0 ? 2 : -2), y - 1, 1, 1);
+    }
     if ((this.t % 1.6) < 0.18) {
       crisp.fillStyle = '#ff5a5a';
       crisp.fillRect(this.cameraLed[0] - cam, this.cameraLed[1], 1, 1);
@@ -1232,10 +1312,13 @@ export class TitleScene {
     // Capa de niebla: flores fuera de foco, bancos de bruma y rayos de sol.
     haze.clearRect(0, 0, SW, SH);
     // La noche cae de izquierda a derecha según la posición en el mundo.
-    if (nightAt(this.camX + VW) > 0) {
-      const g = haze.createLinearGradient((NIGHT_FROM - cam) / 4, 0, (NIGHT_TO - cam) / 4, 0);
+    if (nightAt(this.camX + VW) > 0 || nightAt(this.camX) > 0) {
+      const x0 = (NIGHT_FROM - cam) / 4, x1 = (GREEN.x1 - cam) / 4, span = GREEN.x1 - NIGHT_FROM;
+      const g = haze.createLinearGradient(x0, 0, x1, 0);
       g.addColorStop(0, 'rgba(26,22,66,0)');
-      g.addColorStop(1, 'rgba(26,22,66,0.5)');
+      g.addColorStop((NIGHT_TO - NIGHT_FROM) / span, 'rgba(26,22,66,0.5)');
+      g.addColorStop((GREEN.x0 - NIGHT_FROM) / span, 'rgba(26,22,66,0.5)');
+      g.addColorStop(1, 'rgba(26,22,66,0)');
       haze.fillStyle = g;
       haze.fillRect(0, 0, SW, SH);
     }
@@ -1385,7 +1468,8 @@ function paintCity(pb: PixelBuffer, rng: Rng, width: number, night: boolean): vo
 
 // Árboles lejanos perdidos en la bruma.
 function paintDistantTrees(pb: PixelBuffer, rng: Rng, width: number): void {
-  for (let x = 30 + rng.int(40); x < width; x += 70 + rng.int(90)) {
+  const limit = Math.min(width, 88 + PAR_MID * GREEN.x0);
+  for (let x = 30 + rng.int(40); x < limit; x += 70 + rng.int(90)) {
     const y = 112 + rng.int(18), k = 0.78 + rng.next() * 0.1;
     pb.rect(x - 1, y, 3, HORIZON - y + 2, fogged(C.trunkDark, k));
     for (let i = 0; i < 7; i++) {
@@ -1634,6 +1718,7 @@ function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
     if (Math.abs(x - BENCH.x) < 52) continue; // espacio libre alrededor de la banca
     if (Math.abs(x - DRAGON.x - DRAGON.w / 2) < 44) continue; // y alrededor de Chimuelo
     if (Math.abs(x - ROAD.cx) < 118) continue; // la autopista
+    if (x > GREEN.x0 - 20) continue; // en el verde hay otras plantas
     if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
     spots.push([x, baseY, r]);
   }
@@ -1941,6 +2026,150 @@ function renderCar(front: boolean, color: string): HTMLCanvasElement {
   else { pb.rect(2, 6, 3, 2, hex('#ff5a5a')); pb.rect(15, 6, 3, 2, hex('#ff5a5a')); pb.rect(8, 7, 4, 1, hex('#e6e2d8')); }
   pb.rect(0, 9, 20, 1, chrome);
   pb.rect(1, 10, 4, 1, dark); pb.rect(15, 10, 4, 1, dark);
+  return pb.toCanvas();
+}
+
+// ───────────────────────── Santa Cruz: el verde ─────────────────────────
+
+// Colinas verdes al fondo (capa lejana), que van tapando la ciudad.
+function paintGreenHills(pb: PixelBuffer, rng: Rng, width: number, night: boolean): void {
+  const start = 128 + PAR_FAR * GREEN.x0 - 60;
+  const k = night ? 0.55 : 0.75;
+  for (let x = Math.round(start); x < width; x++) {
+    const a = Math.min(1, (x - start) / 90);
+    // Los edificios se desvanecen a medida que entra el verde.
+    for (let y = 0; y < HORIZON; y++) { const i = (y * pb.w + x) * 4; pb.data[i + 3] = Math.round(pb.data[i + 3] * (1 - a)); }
+    const h1 = 26 + Math.sin(x * 0.045) * 9 + Math.sin(x * 0.011 + 2) * 6;
+    const h2 = 14 + Math.sin(x * 0.07 + 1) * 5 + Math.sin(x * 0.02) * 4;
+    for (let y = Math.round(HORIZON - h1); y < HORIZON; y++) pb.set(x, y, [...mix(night ? C.nightMid : C.tropDark, C.mist, k + 0.12).slice(0, 3), Math.round(255 * a)] as RGBA);
+    for (let y = Math.round(HORIZON - h2); y < HORIZON; y++) pb.set(x, y, [...mix(night ? C.nightLow : C.trop, C.mist, k).slice(0, 3), Math.round(255 * a)] as RGBA);
+    if (rng.next() < 0.06) pb.set(x, Math.round(HORIZON - h2) - 1, [...mix(night ? C.nightLow : C.tropLight, C.mist, k).slice(0, 3), Math.round(255 * a)] as RGBA);
+  }
+}
+
+// Palmeras lejanas en la capa media, en vez de los árboles de lila.
+function paintDistantPalms(pb: PixelBuffer, rng: Rng, width: number): void {
+  const start = 88 + PAR_MID * GREEN.x0 + 20;
+  for (let x = start + rng.int(30); x < width; x += 44 + rng.int(50)) {
+    const k = 0.45 + rng.next() * 0.15, h = 18 + rng.int(12), top = HORIZON - h;
+    for (let y = top; y < HORIZON + 2; y++) { const tx = x + Math.round(Math.sin((y - top) * 0.12) * 2); pb.set(tx, y, fogged(C.palmTrunkDark, k)); pb.set(tx + 1, y, fogged(C.palmTrunk, k)); }
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI / 2 + (i - 3) * 0.5, len = 11 + rng.int(7);
+      for (let t = 0; t <= 1; t += 0.08) {
+        const px = Math.round(x + Math.cos(a) * len * t), py = Math.round(top + Math.sin(a) * len * t + t * t * 7);
+        pb.set(px, py, fogged(C.palmLeaf, k)); pb.set(px, py + 1, fogged(C.palmLeafLight, k));
+      }
+    }
+  }
+}
+
+// El suelo se vuelve verde cruceño y la vereda, tierra colorada.
+function paintGreenGround(pb: PixelBuffer, rng: Rng): void {
+  for (let x = GREEN.x0 - 40; x < WORLD_W; x++) {
+    const g = greenAt(x);
+    if (g <= 0) continue;
+    for (let y = HORIZON; y < VH; y++) {
+      const cur = pb.get(x, y);
+      const onPath = y >= 167 && y <= 178;
+      const target = onPath ? mix(C.earth, C.earthLight, ((x * 7 + y * 13) % 11) / 22) : mix(C.tropDark, C.trop, ((x * 3 + y * 5) % 9) / 9);
+      pb.set(x, y, [cur[0] + (target[0] - cur[0]) * g, cur[1] + (target[1] - cur[1]) * g, cur[2] + (target[2] - cur[2]) * g, 255]);
+    }
+  }
+  const rgb = (c: string) => hex(c);
+  for (let i = 0; i < 260; i++) {
+    const x = GREEN.x0 + rng.int(WORLD_W - GREEN.x0), y = HORIZON + rng.int(VH - HORIZON);
+    if (y >= 166 && y <= 179) continue;
+    const g = greenAt(x);
+    if (rng.next() > g) continue;
+    // Pasto alto y florcitas.
+    const col = rng.pick([C.tropLight, C.tropDark, C.palmLeafLight]);
+    pb.set(x, y, rgb(col)); pb.set(x, y - 1, rgb(col)); pb.set(x + 1, y - 2, rgb(col));
+    if (rng.next() < 0.25) pb.set(x + 2, y - 1, rgb(rng.pick([C.tajiboYellow, C.toborochiPink, '#ffffff'])));
+  }
+  // Piedritas y surcos en la tierra colorada.
+  for (let i = 0; i < 160; i++) {
+    const x = GREEN.x0 + rng.int(WORLD_W - GREEN.x0), y = 168 + rng.int(10);
+    if (rng.next() > greenAt(x)) continue;
+    pb.rect(x, y, 1 + rng.int(2), 1, rgb(rng.next() < 0.5 ? C.earthDark : C.earthLight));
+  }
+}
+
+// Palmera de motacú: tronco curvo y corona de hojas.
+function renderPalm(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(44, 62);
+  const lean = rng.range(-6, 6);
+  pb.ellipse(22, 60, 8, 2, hex(C.shadow, 60));
+  for (let y = 59; y >= 16; y--) {
+    const t = (59 - y) / 43, x = 22 + Math.round(lean * t * t);
+    pb.rect(x - 2, y, 5, 1, hex(C.palmTrunkDark)); pb.rect(x - 1, y, 2, 1, hex(C.palmTrunk));
+    if (y % 4 === 0) pb.rect(x - 2, y, 5, 1, hex(C.palmTrunkDark));
+  }
+  const cx = 22 + Math.round(lean), cy = 16;
+  for (let i = 0; i < 7; i++) {
+    const a = -Math.PI / 2 + (i - 3) * 0.48 + rng.range(-0.1, 0.1), len = 15 + rng.int(6);
+    for (let t = 0; t <= 1; t += 0.06) {
+      const x = Math.round(cx + Math.cos(a) * len * t), y = Math.round(cy + Math.sin(a) * len * t + t * t * 9);
+      pb.rect(x - 1, y, 3, 1, hex(C.palmLeaf)); pb.set(x, y - 1, hex(C.palmLeafLight));
+      if (t > 0.3) { pb.set(x - 2, y + 1, hex(C.palmLeaf)); pb.set(x + 2, y + 1, hex(C.palmLeaf)); }
+    }
+  }
+  for (let i = 0; i < 3; i++) pb.circle(cx - 3 + i * 3, cy + 3 + (i % 2), 1, hex('#8a5a2b'));
+  return pb.toCanvas();
+}
+
+// Toborochi: tronco de botella y copa rosada.
+function renderToborochi(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(46, 58);
+  pb.ellipse(23, 56, 12, 2, hex(C.shadow, 60));
+  for (let y = 55; y >= 20; y--) {
+    const t = (55 - y) / 35;
+    const half = Math.round(3 + 5 * Math.sin(Math.PI * Math.min(1, t * 1.3)));
+    pb.rect(23 - half - 1, y, half * 2 + 3, 1, hex(C.toborochiTrunkDark)); pb.rect(23 - half, y, half * 2, 1, hex(C.toborochiTrunk));
+    if (rng.next() < 0.3) pb.set(23 - half + rng.int(half * 2), y, hex(C.toborochiTrunkDark));
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = -Math.PI / 2 + (i - 1.5) * 0.7;
+    for (let t = 0; t <= 1; t += 0.1) pb.rect(Math.round(23 + Math.cos(a) * 14 * t) - 1, Math.round(22 + Math.sin(a) * 14 * t), 2, 2, hex(C.toborochiTrunkDark));
+  }
+  for (let i = 0; i < 16; i++) {
+    const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * 17;
+    const x = Math.round(23 + Math.cos(a) * d), y = Math.round(16 + Math.sin(a) * d * 0.7);
+    pb.circle(x + 1, y + 1, 4, hex(C.toborochiPinkDark)); pb.circle(x, y, 4, hex(C.toborochiPink)); pb.circle(x - 1, y - 1, 2, hex(C.toborochiPinkLight));
+  }
+  for (let i = 0; i < 40; i++) pb.set(6 + rng.int(34), 4 + rng.int(24), hex(rng.pick([C.toborochiPinkLight, C.toborochiPinkDark, '#ffffff'])));
+  return pb.toCanvas();
+}
+
+// Tajibo amarillo.
+function renderTajibo(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(40, 54);
+  pb.ellipse(20, 52, 8, 2, hex(C.shadow, 60));
+  for (let y = 51; y >= 22; y--) { pb.rect(18, y, 4, 1, hex(C.trunkDark)); pb.set(19, y, hex(C.trunk)); }
+  for (let i = 0; i < 3; i++) {
+    const a = -Math.PI / 2 + (i - 1) * 0.8;
+    for (let t = 0; t <= 1; t += 0.1) pb.rect(Math.round(20 + Math.cos(a) * 12 * t) - 1, Math.round(24 + Math.sin(a) * 12 * t), 2, 2, hex(C.trunkDark));
+  }
+  for (let i = 0; i < 14; i++) {
+    const a = rng.range(0, 6.28), d = Math.sqrt(rng.next()) * 15;
+    const x = Math.round(20 + Math.cos(a) * d), y = Math.round(15 + Math.sin(a) * d * 0.7);
+    pb.circle(x + 1, y + 1, 4, hex(C.tajiboYellowDark)); pb.circle(x, y, 4, hex(C.tajiboYellow)); pb.circle(x - 1, y - 1, 2, hex(C.tajiboYellowLight));
+  }
+  return pb.toCanvas();
+}
+
+// Plátano: hojas grandes desde un tallo corto.
+function renderBanana(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(30, 30);
+  pb.ellipse(15, 28, 9, 2, hex(C.shadow, 60));
+  pb.rect(14, 16, 3, 12, hex(C.palmLeaf));
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i - 2) * 0.55 + rng.range(-0.1, 0.1), len = 11 + rng.int(4);
+    for (let t = 0; t <= 1; t += 0.08) {
+      const x = Math.round(15 + Math.cos(a) * len * t), y = Math.round(17 + Math.sin(a) * len * t + t * t * 4);
+      const w = Math.round(2 + 2 * Math.sin(Math.PI * t));
+      pb.rect(x - w, y, w * 2 + 1, 1, hex(t < 0.5 ? C.palmLeafLight : C.palmLeaf)); pb.set(x, y, hex(C.tropDark));
+    }
+  }
   return pb.toCanvas();
 }
 

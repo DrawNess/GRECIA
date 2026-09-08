@@ -17,4 +17,13 @@ export const story = {
       '¿Vamos? Te sigo a donde vayas.',
     ],
   },
+
+  // En el verde, donde Jhammil la deja seguir sola.
+  farewellTalk: {
+    who: 'Jhammil',
+    lines: [
+      'No siempre voy a estar a tu lado.\nPero te acompaño a donde vayas.',
+      'Sigue. Yo te miro desde aquí.',
+    ],
+  },
 };
