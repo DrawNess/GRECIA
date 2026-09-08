@@ -8,7 +8,7 @@ import { C } from '../art/palette';
 import { GRECIA, type DirSprites } from '../art/sprites';
 import { ACTION, type Input } from '../engine/input';
 import { story } from '../content/story';
-import { bigFloret } from '../art/lilac';
+import { bigFloret, panicle } from '../art/lilac';
 
 type Phase = 'plant' | 'planting' | 'growing' | 'toLetter' | 'letter';
 type Pt = [number, number];
@@ -16,6 +16,10 @@ type Pt = [number, number];
 interface Bloom { x: number; y: number; d: number; big: boolean; img: HTMLCanvasElement; born: number }
 interface Leaf { x: number; y: number; d: number; flip: boolean }
 interface Dew { x: number; y: number; ph: number }
+// Rama: puntos ya ondulados, grosor inicial y en qué avance de la principal nace (twigs).
+interface Branch { pts: Pt[]; w0: number; from: number }
+// Flor flotando en el aire: las lejanas nítidas y chicas, las cercanas grandes y borrosas.
+interface Floater { x: number; y: number; vx: number; vy: number; ph: number; near: boolean; img: HTMLCanvasElement }
 
 const PAPER = '#ecdfc4', PAPER_DARK = '#dfd0b0', PAPER_LIGHT = '#f5ecd8';
 const SEED: Pt = [160, 158];
@@ -54,7 +58,12 @@ export class FinaleScene {
   private readonly shadow: HTMLCanvasElement;
   private readonly blooms: Bloom[] = [];
   private readonly leaves: Leaf[] = [];
-  private readonly vines: Pt[][] = [];
+  private readonly branches: Branch[] = [];
+  private readonly floaters: Floater[] = [];
+  private readonly borderTile: HTMLCanvasElement;
+  private readonly farTile: HTMLCanvasElement;
+  private readonly paperSoft: HTMLCanvasElement;
+  private readonly floaterImgs: HTMLCanvasElement[];
   private readonly dew: Dew[] = [];
   private readonly leafImgs: HTMLCanvasElement[];
   private readonly rng = new Rng(2026);
@@ -64,6 +73,7 @@ export class FinaleScene {
   private camX = 0;
   private linesDone = 0;
   private readonly word: HTMLElement;
+  private wordTimer = 0;
   private readonly letterBox: HTMLElement;
   private readonly paragraphs: { el: HTMLElement; x: number; shown: boolean }[] = [];
   private letterLen = 0;
@@ -83,7 +93,7 @@ export class FinaleScene {
     this.word.className = 'finale-word';
     this.word.textContent = story.plantWord;
     root.appendChild(this.word);
-    setTimeout(() => this.word.classList.add('is-shown'), 600);
+    this.wordTimer = window.setTimeout(() => this.word.classList.add('is-shown'), 600);
 
     // La carta: párrafos que se colocan a lo largo de la hoja.
     this.letterBox = document.createElement('div');
@@ -129,14 +139,66 @@ export class FinaleScene {
       if (this.nearText(x, y) || Math.hypot(x - SEED[0], y - SEED[1]) < 22) continue;
       this.blooms.push({ x, y, d: Math.hypot(x - SEED[0], y - SEED[1]) + this.rng.range(0, 40), big: false, img: this.rng.pick(fillClusters), born: -1 });
     }
-    // Ramas de madera que se abren desde el brote hacia las tres líneas y los bordes.
+    // Ramas de madera que se abren desde el brote: curvas con ondulación,
+    // y de cada una salen ramitas con hojas en las puntas.
     const ends: Pt[] = [[40, 44], [110, 22], [160, 20], [212, 22], [282, 44], [24, 118], [298, 118], [70, 154], [250, 154]];
+    const curve = (a: Pt, c: Pt, b: Pt, n: number, wob: number, ph: number): Pt[] => {
+      const pts: Pt[] = [];
+      for (let i = 0; i <= n; i++) {
+        const s = i / n, u = 1 - s;
+        const x = u * u * a[0] + 2 * u * s * c[0] + s * s * b[0], y = u * u * a[1] + 2 * u * s * c[1] + s * s * b[1];
+        // Tangente para ondular en perpendicular, más hacia la punta.
+        const tx = 2 * u * (c[0] - a[0]) + 2 * s * (b[0] - c[0]), ty = 2 * u * (c[1] - a[1]) + 2 * s * (b[1] - c[1]);
+        const tl = Math.hypot(tx, ty) || 1;
+        const off = Math.sin(s * 11 + ph) * wob * s + Math.sin(s * 23 + ph * 2) * wob * 0.4 * s;
+        pts.push([x - (ty / tl) * off, y + (tx / tl) * off]);
+      }
+      return pts;
+    };
     for (const e of ends) {
       const ctrl: Pt = [(SEED[0] + e[0]) / 2 + this.rng.range(-26, 26), (SEED[1] + e[1]) / 2 + this.rng.range(-8, 8)];
-      const pts: Pt[] = [];
-      for (let i = 0; i <= 160; i++) { const s = i / 160, u = 1 - s; pts.push([u * u * SEED[0] + 2 * u * s * ctrl[0] + s * s * e[0], u * u * SEED[1] + 2 * u * s * ctrl[1] + s * s * e[1]]); }
-      this.vines.push(pts);
-      for (let i = 30; i < 150; i += 24) this.leaves.push({ x: pts[i][0], y: pts[i][1], d: Math.hypot(pts[i][0] - SEED[0], pts[i][1] - SEED[1]), flip: (i / 24) % 2 === 0 });
+      const pts = curve(SEED, ctrl, e, 160, 2.4, this.rng.range(0, 6.28));
+      this.branches.push({ pts, w0: 3, from: 0 });
+      for (let i = 34; i < 150; i += 26) this.leaves.push({ x: pts[i][0], y: pts[i][1], d: Math.hypot(pts[i][0] - SEED[0], pts[i][1] - SEED[1]), flip: (i / 26) % 2 === 0 });
+      // Ramitas.
+      const n = 2 + this.rng.int(2);
+      for (let k = 0; k < n; k++) {
+        const s0 = 0.3 + this.rng.range(0, 0.5), i0 = Math.round(s0 * 160);
+        const a = pts[i0], t = pts[Math.min(160, i0 + 4)];
+        const ang = Math.atan2(t[1] - a[1], t[0] - a[0]) + (this.rng.next() < 0.5 ? 1 : -1) * this.rng.range(0.55, 1.05);
+        const len = this.rng.range(14, 26);
+        const end: Pt = [a[0] + Math.cos(ang) * len, a[1] + Math.sin(ang) * len - len * 0.25];
+        const c2: Pt = [(a[0] + end[0]) / 2 + this.rng.range(-4, 4), (a[1] + end[1]) / 2 - 3];
+        const tp = curve(a, c2, end, 40, 1.2, this.rng.range(0, 6.28));
+        this.branches.push({ pts: tp, w0: 1.6, from: s0 });
+        this.leaves.push({ x: end[0], y: end[1], d: Math.hypot(end[0] - SEED[0], end[1] - SEED[1]) + 6, flip: k % 2 === 0 });
+        if (this.rng.next() < 0.6) this.leaves.push({ x: tp[20][0], y: tp[20][1], d: Math.hypot(tp[20][0] - SEED[0], tp[20][1] - SEED[1]) + 4, flip: k % 2 !== 0 });
+      }
+    }
+    // Flores en el aire y las capas de la carta.
+    this.floaterImgs = [renderFlowerCanvas(artRng, 2.4, 0.3, 0.1), renderFlowerCanvas(artRng, 3.2, 0.8, 0.05), renderFlowerCanvas(artRng, 4, 0.2, 0)];
+    for (let i = 0; i < 16; i++) this.floaters.push(this.newFloater(i < 5, true));
+    this.borderTile = renderBorderTile(new Rng(21));
+    this.farTile = renderFarTile(new Rng(22));
+    const ps = document.createElement('canvas'); ps.width = SW; ps.height = SH;
+    const pctx = ps.getContext('2d')!; pctx.imageSmoothingEnabled = true; pctx.drawImage(this.paper2, 0, 0, SW, SH);
+    this.paperSoft = ps;
+  }
+
+  private newFloater(near: boolean, anywhere: boolean): Floater {
+    const r = this.rng;
+    return {
+      x: anywhere ? r.range(0, VW) : (r.next() < 0.5 ? -12 : VW + 12), y: r.range(6, 150),
+      vx: r.range(4, 10) * (r.next() < 0.5 ? 1 : -1) * (near ? 1.6 : 1), vy: r.range(-4, 4),
+      ph: r.range(0, 6.28), near, img: near ? this.floaterImgs[2] : r.pick(this.floaterImgs.slice(0, 2)),
+    };
+  }
+
+  private updateFloaters(dt: number): void {
+    for (let i = 0; i < this.floaters.length; i++) {
+      const f = this.floaters[i];
+      f.x += f.vx * dt; f.y += (f.vy + Math.sin(this.t * 1.3 + f.ph) * 6) * dt;
+      if (f.x < -30 || f.x > VW + 30 || f.y < -20 || f.y > VH + 20) this.floaters[i] = this.newFloater(f.near, false);
     }
   }
 
@@ -154,9 +216,11 @@ export class FinaleScene {
 
   update(dt: number, input?: Input): void {
     this.t += dt;
+    this.updateFloaters(dt);
     if (this.phase === 'plant') {
       if (input?.take(ACTION)) {
         this.phase = 'planting'; this.t = 0;
+        clearTimeout(this.wordTimer);
         this.word.classList.remove('is-shown');
         setTimeout(() => this.word.remove(), 1600);
         this.events.push('sfx:twinkle');
@@ -205,8 +269,11 @@ export class FinaleScene {
     const cam = Math.round(this.camX);
 
     if (this.phase === 'letter' || this.phase === 'toLetter') {
-      // La hoja de la carta: el papel se repite a lo largo.
-      for (let x = -((cam % VW) + VW) % VW; x < VW; x += VW) crisp.drawImage(this.paper2, x, 0);
+      // Fondo (capa borrosa): el papel y racimos pálidos lejanos que se mueven despacio.
+      const pOff = -((cam % VW) + VW) % VW;
+      for (let x = pOff; x < VW; x += VW) soft.drawImage(this.paperSoft, x / 4, 0);
+      const farW = this.farTile.width, fOff = -(((cam * 0.5) % farW) + farW) % farW;
+      for (let x = fOff; x < VW; x += farW) soft.drawImage(this.farTile, x / 4, 0, farW / 4, SH);
       // Lilas pequeñas a lo largo del camino.
       const r = new Rng(5);
       for (let i = 0; i < this.letterLen / 18; i++) {
@@ -218,22 +285,33 @@ export class FinaleScene {
         crisp.fillStyle = C.flowerCenter; crisp.fillRect(sx, yy, 1, 1);
       }
       if (this.phase === 'letter') this.drawGirl(crisp, Math.round(this.px) - cam, Math.round(this.py));
+      // Flores en el aire (las nítidas) y el borde de lilas en primer plano, que corre más rápido.
+      for (const f of this.floaters) if (!f.near) crisp.drawImage(f.img, Math.round(f.x - f.img.width / 2), Math.round(f.y - f.img.height / 2));
+      const bw = this.borderTile.width, bOff = -(((cam * 1.25) % bw) + bw) % bw;
+      for (let x = bOff; x < VW; x += bw) crisp.drawImage(this.borderTile, Math.round(x), 0);
+      for (const f of this.floaters) if (f.near) { const w = f.img.width * 0.45, h = f.img.height * 0.45; haze.drawImage(f.img, f.x / 4 - w / 2, f.y / 4 - h / 2, w, h); }
       if (this.phase === 'toLetter') { crisp.globalAlpha = 1 - Math.min(1, this.t / 1.6); crisp.drawImage(this.paper, 0, 0); crisp.globalAlpha = 1; }
       return;
     }
 
     crisp.drawImage(this.paper, 0, 0);
     if (this.phase === 'growing') {
-      // Ramas de madera creciendo: gruesas cerca del brote, finas en la punta.
+      // Ramas creciendo: corteza gris-marrón con veta clara y sombra, grosor
+      // que se afina; las ramitas brotan cuando la principal pasa por su nudo.
       const p = Math.min(1, this.t / 4.5);
-      for (const v of this.vines) {
-        const n = Math.floor(p * (v.length - 1));
+      for (const b of this.branches) {
+        const prog = b.from === 0 ? p : Math.min(1, Math.max(0, (p - b.from) / 0.3));
+        const n = Math.floor(prog * (b.pts.length - 1));
         for (let i = 0; i <= n; i++) {
-          const [x, y] = v[i];
-          const w = i < 30 ? 3 : i < 90 ? 2 : 1;
-          crisp.fillStyle = '#5b4232'; crisp.fillRect(Math.round(x), Math.round(y), w, w);
-          if (w > 1) { crisp.fillStyle = '#7d5c45'; crisp.fillRect(Math.round(x), Math.round(y), 1, w); }
+          const s = i / (b.pts.length - 1);
+          const [x, y] = b.pts[i];
+          const w = Math.max(1, Math.round(b.w0 * (1 - s * 0.7)));
+          const ix = Math.round(x - w / 2), iy = Math.round(y - w / 2);
+          crisp.fillStyle = (i % 9 === 0) ? '#3f3329' : '#5a4a3f';
+          crisp.fillRect(ix, iy, w, w);
+          if (w >= 2) { crisp.fillStyle = '#8a7461'; crisp.fillRect(ix, iy, 1, 1); crisp.fillStyle = '#3f3329'; crisp.fillRect(ix + w - 1, iy + w - 1, 1, 1); }
         }
+        if (b.w0 >= 3 && n > 20) { const [kx, ky] = b.pts[20]; crisp.fillStyle = '#3f3329'; crisp.fillRect(Math.round(kx) + 1, Math.round(ky), 1, 2); }
       }
       // Hojas de lila (acorazonadas) a lo largo de las ramas.
       const r = this.waveR();
@@ -278,6 +356,22 @@ export class FinaleScene {
     } else if (this.phase === 'growing' && this.t < 0.8) {
       crisp.drawImage(this.flowerItem, SEED[0] - 2, SEED[1] - 12);
     }
+    // Flores en el aire.
+    for (const f of this.floaters) if (!f.near) crisp.drawImage(f.img, Math.round(f.x - f.img.width / 2), Math.round(f.y - f.img.height / 2));
+    // Blur de ensueño: los bordes de la hoja se disuelven en su versión borrosa,
+    // y un halo lila muy suave envuelve las flores.
+    soft.drawImage(crisp.canvas, 0, 0, SW, SH);
+    crisp.globalCompositeOperation = 'destination-in';
+    const g = crisp.createRadialGradient(160, 92, 82, 160, 92, 178);
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    crisp.fillStyle = g; crisp.fillRect(0, 0, VW, VH);
+    crisp.globalCompositeOperation = 'source-over';
+    if (this.phase === 'growing') {
+      const hg = haze.createRadialGradient(40, 20, 4, 40, 20, 40);
+      hg.addColorStop(0, `rgba(214,190,240,${(0.16 * Math.min(1, this.waveR() / 120)).toFixed(3)})`); hg.addColorStop(1, 'rgba(214,190,240,0)');
+      haze.fillStyle = hg; haze.fillRect(0, 0, SW, SH);
+    }
+    for (const f of this.floaters) if (f.near) { const w = f.img.width * 0.45, h = f.img.height * 0.45; haze.drawImage(f.img, f.x / 4 - w / 2, f.y / 4 - h / 2, w, h); }
     // Chispas al plantar.
     if (this.phase === 'planting' && this.t > 1.05) {
       const r = new Rng(3);
@@ -304,6 +398,33 @@ function renderFlowerCanvas(rng: Rng, S: number, rot: number, k = 0): HTMLCanvas
   const size = Math.ceil(S * 2.3) + 4;
   const pb = new PixelBuffer(size, size);
   bigFloret(pb, rng, size >> 1, size >> 1, S, rot, k);
+  return pb.toCanvas();
+}
+
+// Borde de la carta: racimos de lila con hojas arriba y abajo, en primer plano.
+function renderBorderTile(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(480, VH);
+  const leafAt = (x: number, y: number) => { for (let i = 0; i < 4; i++) { pb.set(x + i, y, hex(C.leaf)); pb.set(x + i, y + 1, hex(C.leafDark)); } pb.set(x + 1, y - 1, hex(C.leafLight)); };
+  for (let x = 6; x < 480; x += 26 + rng.int(20)) {
+    // Arriba: racimos que cuelgan hacia abajo.
+    panicle(pb, rng, x, -2, 18 + rng.int(8), 12 + rng.int(6), Math.PI + rng.range(-0.3, 0.3), 2, 0.04, 44);
+    leafAt(x + 6 + rng.int(6), 14 + rng.int(8));
+    // Abajo: racimos que suben desde el borde, dejando ver a Grecia.
+    const bx = x + 12 + rng.int(10);
+    panicle(pb, rng, bx, 184, 16 + rng.int(6), 10 + rng.int(6), rng.range(-0.3, 0.3), 2, 0.04, 36);
+    leafAt(bx - 8 - rng.int(4), 172 + rng.int(4));
+  }
+  for (let i = 0; i < 40; i++) { const x = rng.int(480), top = rng.next() < 0.5; bigFloret(pb, rng, x, top ? 4 + rng.int(10) : 168 + rng.int(10), 2.2 + rng.next(), rng.range(0, 1.5), 0.02); }
+  return pb.toCanvas();
+}
+
+// Fondo de la carta: racimos grandes y pálidos que se verán borrosos y lentos.
+function renderFarTile(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(400, VH);
+  for (let i = 0; i < 14; i++) {
+    const x = rng.int(400), y = rng.next() < 0.5 ? rng.range(10, 60) : rng.range(120, 170);
+    panicle(pb, rng, x, y + 20, 34 + rng.int(16), 22 + rng.int(10), rng.range(-0.5, 0.5), 2, 0.55, 60);
+  }
   return pb.toCanvas();
 }
 

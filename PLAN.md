@@ -107,10 +107,15 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   tierra, chispas). Del brote crecen ramas por toda la hoja, brotan hojas y
   las flores aparecen en oleada desde la planta formando **"TE AMO / MUCHO
   MUCHO / GRECIA"** con letras de 5×7 hechas de lilas, mientras el resto de
-  la hoja se puebla de lilas pálidas (~12 s, con chispas por línea). Luego la
-  hoja se renueva y empieza **la carta**: Grecia camina por la hoja y los
-  párrafos de `story.letter` aparecen a su paso (uno cada 300 px; el último es
-  la firma). Jhammil escribe la carta; hoy hay párrafos de relleno.
+  la hoja se puebla de lilas pálidas (~12 s, con chispas por línea). Las
+  letras son flores de verdad (`art/lilac.ts`), las ramas son de madera con
+  ondulación, corteza y ramitas con hojas; los bordes de la hoja se
+  disuelven en borroso (ensueño) y flotan flores en el aire. Luego la hoja
+  se renueva y empieza **la carta**, con profundidad: racimos pálidos y
+  borrosos al fondo (lentos), la hoja con los párrafos de `story.letter`
+  apareciendo al paso de Grecia (uno cada 300 px; el último es la firma), un
+  **borde de lilas** arriba y abajo en primer plano (más rápido) y flores
+  flotando en dos profundidades. Jhammil escribe la carta; hoy hay relleno.
 - Grecia rodea el tronco por la vereda; faroles y banca al borde del pasto.
 
 ## Menú (etapa 0)

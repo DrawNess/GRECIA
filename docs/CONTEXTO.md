@@ -74,7 +74,10 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      flor); del brote crecen ramas, hojas y flores que forman "TE AMO MUCHO
      MUCHO GRECIA" (letras 5×7 de lilas; `GLYPHS`, `MESSAGE`, `LINE_TOPS`)
      — cada punto es una flor de verdad (`bigFloret`, solapadas) sobre ramas
-     de madera con hojas — y pueblan la hoja; luego la carta: Grecia camina y los párrafos de
+     de madera onduladas con ramitas y hojas; bordes disueltos en borroso y
+     flores flotando — y pueblan la hoja; luego la carta con profundidad
+     (fondo borroso lento, borde de lilas en primer plano rápido, flores en
+     el aire): Grecia camina y los párrafos de
      `story.letter` (DOM, `.letter__p`) aparecen a su paso. La puerta de
      jardín se eliminó: el final es la hoja.
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
