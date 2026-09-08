@@ -75,13 +75,16 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 - Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
   soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va
   volando; si ella se aleja un rato, vuelve a dormirse.
-- Tramo 5 (noche, después de Chimuelo): **la autopista** (x 2036–2124), en
-  perspectiva hacia el fondo, con guardarraíl, farolas y paso de cebra.
-  Minijuego: autos que vienen creciendo por el carril derecho (faros) y se
-  alejan por el izquierdo (luces rojas), cada 1,6–3,6 s por carril; hay que
-  cruzar cuando no venga ninguno. Si un auto pisa a Grecia o a Jhammil:
-  fundido corto y **vuelven a la banca**, de pie y de la mano ("Otra vez,
-  con calma."). Aviso al acercarse. Sonido: paso de auto y bocina.
+- Tramo 5 (noche, después de Chimuelo, x ≥ 1990): **la autopista**,
+  horizontal, de cuatro carriles (líneas discontinuas, la del medio
+  amarilla), acera de enfrente con baranda y farolas, bordillos y paso de
+  cebra. La vereda de este lado termina en una baranda: hay que cruzar de
+  abajo hacia arriba, carril por carril (tipo Frogger). Autos de perfil:
+  los dos carriles lejanos van a la izquierda, los cercanos a la derecha,
+  con faros y luces rojas; uno cada 1,8–4,2 s por carril. Si un auto pisa a
+  Grecia o a Jhammil: bocina, fundido corto y **vuelven a la banca**, de pie
+  y de la mano ("Otra vez, con calma."). La puerta final está en la acera
+  de enfrente.
 - De noche en el parque (fuera de la tormenta): luciérnagas y, de vez en
   cuando, una estrella fugaz.
 - **Sonido** generado por código (`engine/audio.ts`): viento, lluvia y truenos
