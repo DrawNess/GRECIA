@@ -38,9 +38,14 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      relámpagos, charcos. Minijuego: tres árboles muertos que crujen y se
      desploman cruzando la vereda al acercarse (si la aplastan → vuelta al
      menú con `#again`, subtítulo "otra vez, con calma"); el tronco caído se
-     rompe con J (3 golpes). Rayos dirigidos con aviso en el suelo (si la
-     alcanzan → vuelta al menú). Con cada tronco roto amaina la lluvia y se
-     abren las nubes.
+     rompe con J (romper con ritmo: barra con marcador, al centro golpea
+     fuerte). Rayos dirigidos con aviso en el suelo (si la alcanzan → vuelta
+     al menú) y ramas que caen (solo tropieza). Correr con Shift/K. Un
+     **kiosco rojo** es refugio: bajo el toldo no llegan rayos ni ramas. Con
+     cada tronco roto amaina la lluvia; con el último la tormenta pasa y
+     aparece **la flor de lila**: J la recoge y Grecia la lleva en la mano
+     (`player.flower`). Está pensada para abrir una puerta más adelante
+     (Jhammil lo explicará).
    - Tramo 4 (noche): tercer árbol, farol, **la banca grande con Jhammil**
      sentado; con J Grecia se sienta a su lado y se miran (etiqueta con su
      nombre). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
@@ -75,7 +80,7 @@ src/main.ts                arranque: Stage, Input, escena, bucle, puerta, etique
 src/style.css              panel del menú, etiqueta, ayuda, fuentes
 src/engine/stage.ts        resolución 320×180 y escalado entero; 3 capas
 src/engine/loop.ts         bucle rAF con dt acotado + respaldo por setTimeout
-src/engine/input.ts        teclado: flechas/WASD, J acción, K/Esc cancelar
+src/engine/input.ts        teclado: flechas/WASD, J acción, Shift/K correr, Esc cancelar
 src/engine/pixels.ts       PixelBuffer: rasterizador pixel a pixel + sprite() desde texto
 src/engine/rng.ts          aleatorio con semilla (todo el arte es reproducible)
 src/engine/hash.ts         sha256 en JS puro (funciona también en http://)
@@ -136,8 +141,13 @@ scripts/hash.mjs           `pnpm hash`
   la capa media (`paintStormClouds`, alpha según `broken`). Árboles muertos =
   props `barrier` con estado `tree` (stand → shake → fall → down): de pie
   (`renderDeadTree`), al caer se vuelven tronco tendido (`renderFallenTrunk`
-  por `hp`) sólido; `hitBarrier()` lo rompe. `hurt()` → evento `caught` →
-  main funde el velo y recarga con `#again`.
+  por `hp`) sólido; `hitBarrier()` lo rompe con el ritmo de `rhythm()`.
+  Ramas: `branches` (caen en ~0,8 s; tropiezo). Kiosco: prop `kiosk`;
+  `sheltered()` = bajo el toldo. Flor: al romper el último tronco,
+  `flowerTimer` crea el prop `flower`; `poke()` la recoge → `player.flower`
+  y `drawCarried()` la dibuja en la mano según `facing`. `hurt()` → evento
+  `caught` → main funde el velo y recarga con `#again`. Correr:
+  `Input.running`, `player.stamina` (1,3 s de carrera, se recupera al doble).
 - **Menú**: la composición a cámara 0 se enmascara (`menuBack`); en el juego
   se compone en vivo cada cuadro (`compose()`).
 
@@ -166,7 +176,10 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   la historia.
 - **Chimuelo**: dragón negro dormido después de la banca; despierta con
   ella, corazones, y vuela.
-- Tecla de interacción: **J** (decisión de Jhammil).
+- Tecla de interacción: **J** (decisión de Jhammil). Correr: Shift/K.
+- **La flor de lila**: la recompensa de la tormenta; Grecia la lleva en la
+  mano y la usará para abrir una puerta al final del tramo (Jhammil lo
+  explicará después).
 
 Textos editables: `src/content/story.ts` (nombres; próximamente frases) y
 `src/content/gate.ts` (menú). Las respuestas de la puerta van como sha256:

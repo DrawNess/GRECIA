@@ -28,6 +28,10 @@ const stormAt = (x: number) => {
 // Árboles muertos junto a la vereda: se desploman al acercarse; el tronco
 // caído se rompe con J.
 const BARRIERS = [1250, 1400, 1550];
+// El kiosco rojo: refugio de los rayos. La flor de lila aparece al pasar la tormenta.
+const KIOSK = { x: 1330, baseY: 151 };
+const FLOWER_SPOT = { x: 1612, baseY: 174 };
+const RUN_MULT = 1.7;
 const BENCH = { x: 1830, baseY: 165 };
 // Chimuelo duerme después de la banca, sobre el pasto.
 const DRAGON = { x: 1940, baseY: 164, w: 44, h: 30 };
@@ -51,20 +55,22 @@ interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: s
 interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
 // Objeto en el suelo (coordenadas de mundo). `baseY` decide el orden de dibujo.
 type Secret = 'none' | 'butterflies' | 'birds';
-type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier';
+type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier' | 'kiosk' | 'flower';
 interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number }; hp?: number; variants?: HTMLCanvasElement[]; tree?: TreeState; t?: number; standing?: HTMLCanvasElement }
 // Lluvia (pantalla) y relámpago.
 interface Rain { x: number; y: number; v: number }
 interface Bolt { pts: Pt[]; t: number }
 // Rayo dirigido: aviso en el suelo y luego cae.
 interface Strike { x: number; groundY: number; t: number }
+// Rama que cae rápido (mundo): sombra pequeña; si alcanza a Grecia, tropieza.
+interface Branch { x: number; groundY: number; h: number; v: number; rot: number }
 type TreeState = 'stand' | 'shake' | 'fall' | 'down';
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type DragonState = 'sleep' | 'wake' | 'fly' | 'gone';
 interface Dragon { state: DragonState; t: number; x: number; y: number; vx: number; vy: number; hearts: boolean; lastZ: number }
 type Facing = 'up' | 'down' | 'left' | 'right';
-interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number; sitting: boolean; stun: number; knock: number }
+interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number; sitting: boolean; stun: number; knock: number; running: boolean; stamina: number; flower: boolean }
 // Luz nocturna (mundo): farol o ventana; brilla según lo oscuro que esté ahí.
 interface Light { x: number; y: number; r: number; col: string; a: number }
 interface Star { x: number; y: number; ph: number }
@@ -102,7 +108,13 @@ export class TitleScene {
   readonly icon: HTMLCanvasElement;
 
   private readonly props: Prop[] = [];
-  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false, stun: 0, knock: 0 };
+  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false, stun: 0, knock: 0, running: false, stamina: 1, flower: false };
+  private readonly branches: Branch[] = [];
+  private nextBranch = 2;
+  private flowerTimer = -1;
+  private shelterSeen = false;
+  private dustTimer = 0;
+  private readonly carried: HTMLCanvasElement;
   // Tormenta.
   private readonly clouds: HTMLCanvasElement;
   private readonly rain: Rain[] = [];
@@ -200,6 +212,10 @@ export class TitleScene {
     // La banca grande, con Jhammil sentado mirando hacia donde llegará ella.
     this.addProp('bench', renderBench(JHAMMIL_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
     this.addProp('gate', renderGate(rng), 2052, 160, 16, { hw: 15, depth: 4 });
+    // El kiosco rojo: bajo su toldo los rayos no llegan.
+    this.addProp('kiosk', renderKiosk(), KIOSK.x, KIOSK.baseY, 14);
+    this.lights.push({ x: KIOSK.x + 1, y: KIOSK.baseY - 22, r: 6, col: '255,225,170', a: 0.3 });
+    this.carried = renderCarriedFlower().toCanvas();
     // Los árboles muertos de la tormenta: de pie junto a la vereda; caen al
     // acercarse y el tronco cierra el camino hasta romperlo con J.
     for (const bx of BARRIERS) {
@@ -287,11 +303,20 @@ export class TitleScene {
   /** Avisos para la interfaz (ayudas, sonidos), se consumen al leerlos. */
   takeEvents(): string[] { return this.events.splice(0); }
 
+  /** Cuánto ha amainado la tormenta: 0 con todos los troncos en pie … 1 con todos rotos. */
+  private calm(): number { return this.broken / BARRIERS.length; }
+
   /** Qué se oye: día, noche y tormenta (0..1) donde está la cámara. */
   ambience(): { day: number; night: number; storm: number } {
     const n = this.mode === 'game' ? nightAt(this.camX + VW / 2) : 0;
-    const st = this.mode === 'game' ? stormAt(this.camX + VW / 2) * (1 - 0.85 * (this.broken / BARRIERS.length)) : 0;
+    const st = this.mode === 'game' ? stormAt(this.camX + VW / 2) * (1 - this.calm()) : 0;
     return { day: 1 - n, night: n, storm: st };
+  }
+
+  /** ¿Está bajo el toldo del kiosco? Ahí los rayos y las ramas no la alcanzan. */
+  private sheltered(): boolean {
+    const fx = this.player.x + GIRL_W / 2, fy = this.player.y + GIRL_H - 1;
+    return Math.abs(fx - KIOSK.x) < 16 && fy < 172;
   }
 
   /** Etiqueta con el nombre de Jhammil (coordenadas de pantalla) cuando ella está cerca de la banca. */
@@ -356,6 +381,16 @@ export class TitleScene {
     return { img: set.idle[Math.floor(this.t / 0.75) % set.idle.length], bob: 0 };
   }
 
+  // La flor de lila en su mano, según hacia dónde mira.
+  private drawCarried(ctx: CanvasRenderingContext2D, gx: number, gy: number, facing: Facing): void {
+    const off: Record<Facing, Pt> = { right: [8, 9], left: [-1, 9], up: [9, 10], down: [9, 10] };
+    const [dx, dy] = off[facing];
+    const glow = 0.25 + 0.2 * Math.sin(this.t * 3);
+    ctx.fillStyle = `rgba(225,205,255,${glow.toFixed(3)})`;
+    ctx.fillRect(gx + dx - 1, gy + dy - 1, 7, 6);
+    ctx.drawImage(this.carried, gx + dx, gy + dy);
+  }
+
   private blocked(x: number, y: number): boolean {
     const fx = x + GIRL_W / 2, fy = y + GIRL_H - 1;
     for (const pr of this.props) {
@@ -375,6 +410,10 @@ export class TitleScene {
       return;
     }
     const [ax, ay] = input.axis;
+    // Correr (Shift / K): más rápido mientras quede aliento; se recupera al caminar.
+    const wantsRun = input.running && (ax !== 0 || ay !== 0);
+    p.running = wantsRun && p.stamina > 0;
+    p.stamina = Math.max(0, Math.min(1, p.stamina + (p.running ? -dt / 1.3 : dt / 2)));
     if (p.sitting) {
       // Cualquier flecha la levanta de la banca.
       if (ax === 0 && ay === 0) return;
@@ -383,10 +422,18 @@ export class TitleScene {
     }
     p.moving = ax !== 0 || ay !== 0;
     if (!p.moving) { p.walkT = 0; return; }
-    p.walkT += dt;
+    const mult = p.running ? RUN_MULT : 1;
+    p.walkT += dt * mult;
     p.facing = ax !== 0 ? (ax > 0 ? 'right' : 'left') : ay > 0 ? 'down' : 'up';
-    const nx = Math.min(WORLD_W - GIRL_W + 2, Math.max(-2, p.x + ax * SPEED_X * dt));
-    const ny = Math.min(VH - GIRL_H, Math.max(HORIZON - GIRL_H + 2, p.y + ay * SPEED_Y * dt));
+    if (p.running) {
+      this.dustTimer -= dt;
+      if (this.dustTimer <= 0) {
+        this.dustTimer = 0.12;
+        this.critters.push({ kind: 'puff', x: p.x + GIRL_W / 2 - ax * 4, y: p.y + GIRL_H - 2, vx: -ax * 10, vy: -8, ph: 0, t: 0, life: 0.4, col: '#c9c2b4' });
+      }
+    }
+    const nx = Math.min(WORLD_W - GIRL_W + 2, Math.max(-2, p.x + ax * SPEED_X * mult * dt));
+    const ny = Math.min(VH - GIRL_H, Math.max(HORIZON - GIRL_H + 2, p.y + ay * SPEED_Y * mult * dt));
     if (!this.blocked(nx, ny)) { p.x = nx; p.y = ny; }
     else if (!this.blocked(nx, p.y)) p.x = nx;
     else if (!this.blocked(p.x, ny)) p.y = ny;
@@ -396,7 +443,7 @@ export class TitleScene {
     const fx = this.player.x + GIRL_W / 2, fy = this.player.y + GIRL_H - 1;
     let best: Prop | null = null, bestD = Infinity;
     for (const pr of this.props) {
-      if (pr.kind !== 'bush' && pr.kind !== 'bench' && pr.kind !== 'barrier') continue;
+      if (pr.kind !== 'bush' && pr.kind !== 'bench' && pr.kind !== 'barrier' && pr.kind !== 'flower') continue;
       const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
       if (pr.kind === 'barrier' && pr.tree !== 'down') continue;
       if (pr.kind === 'barrier' ? dx > 22 : dx > pr.r + 9 || dy > 14) continue;
@@ -418,6 +465,15 @@ export class TitleScene {
   private poke(pr: Prop): void {
     if (pr.kind === 'bench') { this.sit(); return; }
     if (pr.kind === 'barrier') { this.hitBarrier(pr); return; }
+    if (pr.kind === 'flower') {
+      this.props.splice(this.props.indexOf(pr), 1);
+      this.player.flower = true;
+      this.nearProp = null;
+      this.events.push('flower'); this.events.push('sfx:twinkle');
+      const r = this.rng;
+      for (let k = 0; k < 10; k++) this.critters.push({ kind: 'puff', x: pr.cx + r.range(-6, 6), y: pr.baseY - r.range(4, 14), vx: r.range(-14, 14), vy: r.range(-24, -8), ph: 0, t: 0, life: 0.9, col: r.pick([C.lilacLight, C.lilacPale]) });
+      return;
+    }
     pr.shake = 0.5;
     this.events.push('sfx:rustle');
     const r = this.rng;
@@ -517,18 +573,27 @@ export class TitleScene {
 
   // Golpe a un tronco caído: se astilla, y al tercer golpe se parte. Con cada
   // problema roto la tormenta amaina un poco.
+  /** Posición del marcador de ritmo (0..1) y si ahora mismo está en el centro. */
+  rhythm(): { m: number; good: boolean } {
+    const m = 0.5 + 0.5 * Math.sin(this.t * 4.2);
+    return { m, good: Math.abs(m - 0.5) < 0.15 };
+  }
+
   private hitBarrier(pr: Prop): void {
     const r = this.rng;
     pr.shake = 0.4;
-    pr.hp = (pr.hp ?? 1) - 1;
-    const n = pr.hp > 0 ? 6 : 22;
+    // Con ritmo: J con el marcador al centro golpea fuerte; fuera, apenas astilla.
+    const { good } = this.rhythm();
+    pr.hp = (pr.hp ?? 1) - (good ? 1.5 : 0.5);
+    const n = pr.hp > 0 ? (good ? 10 : 3) : 22;
     for (let i = 0; i < n; i++) {
       this.critters.push({ kind: 'puff', x: pr.cx + r.range(-7, 7), y: pr.baseY - r.range(4, 34), vx: r.range(-45, 45), vy: r.range(-70, -10), ph: 0, t: 0, life: pr.hp > 0 ? 0.7 : 1.1, col: r.pick(['#6f5c55', '#8a746a', '#3f3430']) });
     }
-    if (pr.hp > 0) { pr.img = pr.variants![3 - pr.hp]; this.events.push('sfx:hit'); return; }
+    if (pr.hp > 0) { pr.img = pr.variants![Math.min(2, 3 - Math.ceil(pr.hp))]; this.events.push(good ? 'sfx:crack' : 'sfx:hit'); return; }
     this.props.splice(this.props.indexOf(pr), 1);
     this.broken++;
     this.events.push('sfx:crack');
+    if (this.broken === BARRIERS.length) this.flowerTimer = 1.4;
     this.flash = Math.max(this.flash, 0.6);
     if (this.nearProp === pr) this.nearProp = null;
   }
@@ -537,8 +602,36 @@ export class TitleScene {
   // según los problemas rotos.
   private updateStorm(dt: number): void {
     const p = this.player;
-    const intensity = stormAt(this.camX + VW / 2) * (1 - 0.85 * (this.broken / BARRIERS.length));
+    const intensity = stormAt(this.camX + VW / 2) * (1 - this.calm());
     const r = this.rng;
+    if (!this.shelterSeen && Math.abs(p.x - KIOSK.x) < 70) { this.shelterSeen = true; this.events.push('shelter'); }
+    // Al romper el último tronco, la flor de lila aparece en el camino.
+    if (this.flowerTimer >= 0) {
+      this.flowerTimer -= dt;
+      if (this.flowerTimer < 0) {
+        this.addProp('flower', renderFlowerItem(), FLOWER_SPOT.x, FLOWER_SPOT.baseY, 10);
+        this.events.push('sfx:twinkle');
+        for (let k = 0; k < 12; k++) this.critters.push({ kind: 'puff', x: FLOWER_SPOT.x + r.range(-8, 8), y: FLOWER_SPOT.baseY - r.range(2, 14), vx: r.range(-12, 12), vy: r.range(-20, -6), ph: 0, t: 0, life: 1, col: r.pick([C.lilacLight, C.lilacPale, '#fff6d6']) });
+      }
+    }
+    // Ramas que caen rápido cerca de Grecia; si la alcanzan, tropieza.
+    this.nextBranch -= dt;
+    if (intensity > 0.25 && this.nextBranch <= 0 && !p.sitting && !this.caught) {
+      const x = Math.min(STORM.x1 - 30, Math.max(STORM.x0 + 30, p.x + r.range(-40, 80)));
+      this.branches.push({ x, groundY: r.range(HORIZON + 3, VH - 3), h: 130, v: r.range(150, 190), rot: r.range(0, 6.28) });
+      this.nextBranch = r.range(1.4, 3) / Math.max(0.4, intensity);
+    }
+    for (let i = this.branches.length - 1; i >= 0; i--) {
+      const b = this.branches[i];
+      b.h -= b.v * dt; b.rot += 6 * dt;
+      if (b.h > 0) continue;
+      this.branches.splice(i, 1);
+      const onRoof = Math.abs(b.x - KIOSK.x) < 18 && b.groundY < 172;
+      const py = onRoof ? KIOSK.baseY - 30 : b.groundY - 1;
+      for (let k = 0; k < 5; k++) this.critters.push({ kind: 'puff', x: b.x + r.range(-3, 3), y: py, vx: r.range(-30, 30), vy: r.range(-40, -10), ph: 0, t: 0, life: 0.6, col: r.pick(['#6f5c55', '#8a746a']) });
+      const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
+      if (!onRoof && p.stun <= 0 && !this.caught && Math.abs(fx - b.x) < 7 && Math.abs(fy - b.groundY) < 5) { p.stun = 0.6; p.knock = -55; p.moving = false; this.events.push('sfx:thud'); }
+    }
     if (!this.stormSeen && p.x > STORM.x0 - 30) { this.stormSeen = true; this.events.push('storm'); }
     // Lluvia en pantalla: la cantidad sigue a la intensidad.
     const want = Math.round(90 * intensity);
@@ -588,17 +681,19 @@ export class TitleScene {
       const before = st.t;
       st.t += dt;
       if (before < 0.85 && st.t >= 0.85) {
-        // Cae el rayo.
+        // Cae el rayo. Si cae sobre el kiosco, pega en el toldo.
+        const onRoof = Math.abs(st.x - KIOSK.x) < 20 && st.groundY < 172;
+        const endY = onRoof ? KIOSK.baseY - 32 : st.groundY;
         const pts: Pt[] = [[st.x - this.camX + r.range(-10, 10), -2]];
         let x = pts[0][0], y = 0;
-        while (y < st.groundY - 12) { x += (st.x - this.camX - x) * 0.35 + r.range(-8, 8); y += r.range(10, 16); pts.push([x, y]); }
-        pts.push([st.x - this.camX, st.groundY]);
+        while (y < endY - 12) { x += (st.x - this.camX - x) * 0.35 + r.range(-8, 8); y += r.range(10, 16); pts.push([x, y]); }
+        pts.push([st.x - this.camX, endY]);
         this.bolt = { pts, t: 0 };
         this.flash = 1;
         this.events.push('sfx:thunder:1');
-        for (let k = 0; k < 10; k++) this.critters.push({ kind: 'puff', x: st.x + r.range(-4, 4), y: st.groundY - 1, vx: r.range(-50, 50), vy: r.range(-60, -10), ph: 0, t: 0, life: 0.5, col: r.pick(['#fff6c8', '#ffe27a']) });
+        for (let k = 0; k < 10; k++) this.critters.push({ kind: 'puff', x: st.x + r.range(-4, 4), y: endY - 1, vx: r.range(-50, 50), vy: r.range(-60, -10), ph: 0, t: 0, life: 0.5, col: r.pick(['#fff6c8', '#ffe27a']) });
         const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
-        if (!this.caught && Math.abs(fx - st.x) < 9 && Math.abs(fy - st.groundY) < 7) this.hurt();
+        if (!this.caught && !this.sheltered() && Math.abs(fx - st.x) < 9 && Math.abs(fy - st.groundY) < 7) this.hurt();
       }
       if (st.t > 1.7) this.strikes.splice(i, 1);
     }
@@ -718,7 +813,7 @@ export class TitleScene {
     ctx.drawImage(this.mid, -Math.round(this.camX * PAR_MID), 0);
     // Las nubes van en la capa media (parallax), así que se atenúan según dónde
     // está la cámara para no seguir tapando el cielo fuera de la tormenta.
-    const cloudA = (1 - 0.85 * (this.broken / BARRIERS.length)) * Math.min(1, stormAt(this.camX + VW / 2) * 1.6);
+    const cloudA = (1 - this.calm()) * Math.min(1, stormAt(this.camX + VW / 2) * 1.6);
     if (cloudA > 0.02) { ctx.globalAlpha = cloudA; ctx.drawImage(this.clouds, -Math.round(this.camX * PAR_MID), 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.world, -cam, 0);
     type Drawable = { baseY: number; draw: () => void };
@@ -740,6 +835,12 @@ export class TitleScene {
       }
       items.push({ baseY: pr.baseY, draw: () => ctx.drawImage(pr.img, sx + shake, pr.y) });
     }
+    // Sombras de las ramas que caen.
+    for (const b of this.branches) {
+      const rx = 1.5 + 2.5 * (1 - b.h / 130);
+      ctx.fillStyle = 'rgba(20,18,40,0.35)';
+      ctx.beginPath(); ctx.ellipse(b.x - cam, b.groundY, rx, Math.max(1, rx * 0.45), 0, 0, 6.2832); ctx.fill();
+    }
     // Aviso de rayo: mancha de luz que palpita donde va a caer.
     for (const st of this.strikes) {
       if (st.t >= 0.85) continue;
@@ -760,12 +861,19 @@ export class TitleScene {
     if (withPlayer) {
       const p = this.player;
       if (p.sitting) {
-        items.push({ baseY: BENCH.baseY + 0.5, draw: () => ctx.drawImage(this.seated, Math.round(p.x) - cam, Math.round(p.y)) });
+        items.push({ baseY: BENCH.baseY + 0.5, draw: () => {
+          ctx.drawImage(this.seated, Math.round(p.x) - cam, Math.round(p.y));
+          if (p.flower) this.drawCarried(ctx, Math.round(p.x) - cam, Math.round(p.y), 'right');
+        } });
       } else {
         const { img, bob } = this.girlFrame();
         const wob = p.stun > 0 ? Math.round(Math.sin(p.stun * 40) * 1.5) : 0;
         const gx = Math.round(p.x) - cam + wob, gy = Math.round(p.y) + bob;
-        items.push({ baseY: p.y + GIRL_H - 1, draw: () => { ctx.drawImage(this.girlShadow, gx - wob, gy - bob + GIRL_H - 2); ctx.drawImage(img, gx, gy); } });
+        items.push({ baseY: p.y + GIRL_H - 1, draw: () => {
+          ctx.drawImage(this.girlShadow, gx - wob, gy - bob + GIRL_H - 2);
+          ctx.drawImage(img, gx, gy);
+          if (p.flower) this.drawCarried(ctx, gx, gy, p.facing);
+        } });
       }
     }
     items.sort((a, b) => a.baseY - b.baseY);
@@ -847,6 +955,22 @@ export class TitleScene {
     if ((this.t % 1.6) < 0.18) {
       crisp.fillStyle = '#ff5a5a';
       crisp.fillRect(this.cameraLed[0] - cam, this.cameraLed[1], 1, 1);
+    }
+
+    // Ramas cayendo (giran) y barra de ritmo sobre el tronco cercano.
+    for (const b of this.branches) {
+      const x = Math.round(b.x) - cam, y = Math.round(b.groundY - b.h);
+      const horiz = Math.cos(b.rot) > 0;
+      crisp.fillStyle = '#5a4a44';
+      if (horiz) { crisp.fillRect(x - 3, y, 7, 2); crisp.fillRect(x + 1, y - 2, 1, 2); }
+      else { crisp.fillRect(x, y - 3, 2, 7); crisp.fillRect(x + 2, y - 1, 2, 1); }
+    }
+    if (this.nearProp?.kind === 'barrier' && this.nearProp.tree === 'down' && !this.player.sitting) {
+      const m = this.nearProp, { m: pos, good } = this.rhythm();
+      const bx = m.cx - cam - 13, by = m.baseY - 50;
+      crisp.fillStyle = 'rgba(30,27,42,0.8)'; crisp.fillRect(bx, by, 26, 5);
+      crisp.fillStyle = good ? '#e6d9ff' : '#9d8fc4'; crisp.fillRect(bx + 9, by + 1, 8, 3);
+      crisp.fillStyle = '#ffffff'; crisp.fillRect(bx + 1 + Math.round(pos * 23), by, 2, 5);
     }
 
     // Tormenta: lluvia, relámpagos, rayos con aviso y destello.
@@ -934,7 +1058,7 @@ export class TitleScene {
       haze.fillStyle = g;
       haze.fillRect(0, 0, SW, SH);
     }
-    const stormK = stormAt(this.camX + VW / 2) * (1 - 0.7 * (this.broken / BARRIERS.length));
+    const stormK = stormAt(this.camX + VW / 2) * (1 - this.calm());
     if (stormK > 0) { haze.fillStyle = `rgba(38,42,70,${(0.32 * stormK).toFixed(3)})`; haze.fillRect(0, 0, SW, SH); }
     // Faroles y ventana encendidos.
     for (const l of this.lights) {
@@ -1544,6 +1668,51 @@ function renderFallenTrunk(rng: Rng, hp: number): HTMLCanvasElement {
   }
   if (hp === 1) for (let y = 8; y < 30; y += 2) pb.set(9 + (y % 4 === 0 ? 1 : 0), y, hex('#b39c8e'));
   return pb.toCanvas();
+}
+
+// Kiosco rojo con toldo a rayas: refugio de los rayos.
+function renderKiosk(): HTMLCanvasElement {
+  const pb = new PixelBuffer(44, 48);
+  const red = hex('#c8443f'), redDark = hex('#8f2f2c'), cream = hex('#f6efe2'), wood = hex('#6b4e3d'), dark = hex('#3b2a33');
+  pb.ellipse(22, 46, 20, 2, hex(C.shadow, 70));
+  // Cuerpo.
+  pb.rect(6, 16, 32, 30, dark); pb.rect(7, 17, 30, 29, red); pb.rect(33, 17, 4, 29, redDark);
+  pb.rect(7, 40, 30, 6, redDark); // zócalo
+  // Mostrador y ventana con luz.
+  pb.rect(10, 20, 18, 12, dark); pb.rect(11, 21, 16, 10, hex('#ffe3a6')); pb.rect(11, 21, 16, 3, hex('#fff1c8'));
+  pb.rect(9, 32, 20, 3, wood); pb.rect(9, 32, 20, 1, hex('#8a6a54'));
+  pb.rect(14, 24, 3, 5, hex('#b8865b')); pb.rect(20, 25, 4, 4, hex('#7fbb79')); // cosas en la ventana
+  // Puerta lateral.
+  pb.rect(30, 24, 5, 16, dark); pb.rect(31, 25, 3, 15, wood); pb.set(32, 32, hex(C.flowerCenter));
+  // Toldo a rayas, con su sombra.
+  pb.rect(2, 12, 40, 2, dark);
+  for (let x = 0; x < 44; x++) pb.rect(x, 9, 1, 5, ((x / 4) | 0) % 2 === 0 ? red : cream);
+  pb.rect(0, 8, 44, 1, dark); pb.rect(0, 14, 44, 1, redDark);
+  for (let x = 0; x < 44; x += 4) pb.rect(x + 1, 15, 2, 1, ((x / 4) | 0) % 2 === 0 ? red : cream);
+  // Techito y letrero.
+  pb.rect(8, 3, 28, 6, dark); pb.rect(9, 4, 26, 4, cream); pb.rect(11, 5, 22, 2, redDark);
+  pb.rect(16, 0, 12, 3, dark); pb.rect(17, 1, 10, 2, red);
+  return pb.toCanvas();
+}
+
+// Flor de lila en el suelo, con tallo, esperando que la recojan.
+function renderFlowerItem(): HTMLCanvasElement {
+  const pb = new PixelBuffer(11, 14);
+  pb.ellipse(5, 12, 4, 1, hex(C.shadow, 60));
+  pb.rect(5, 6, 1, 6, hex(C.leafDark)); pb.rect(3, 9, 2, 1, hex(C.leaf)); pb.rect(6, 8, 2, 1, hex(C.leaf));
+  pb.circle(5, 4, 3, hex(C.lilacDeep));
+  for (const [x, y] of [[3, 3], [7, 3], [5, 1], [5, 5], [4, 6], [7, 6]] as Pt[]) { pb.set(x, y, hex(C.lilacLight)); pb.set(x + 1, y, hex(C.lilac)); pb.set(x, y + 1, hex(C.lilac)); pb.set(x - 1, y, hex(C.lilacPale)); pb.set(x, y - 1, hex(C.lilacPale)); }
+  pb.set(5, 3, hex(C.flowerCenter)); pb.set(4, 5, hex(C.flowerCenter));
+  return pb.toCanvas();
+}
+
+// La misma flor, chiquita, para llevarla en la mano.
+function renderCarriedFlower(): PixelBuffer {
+  const pb = new PixelBuffer(5, 6);
+  pb.rect(2, 3, 1, 3, hex(C.leafDark));
+  pb.set(2, 0, hex(C.lilacLight)); pb.set(1, 1, hex(C.lilac)); pb.set(3, 1, hex(C.lilac)); pb.set(2, 1, hex(C.lilacPale));
+  pb.set(0, 2, hex(C.lilacLight)); pb.set(4, 2, hex(C.lilacLight)); pb.set(1, 2, hex(C.lilacDeep)); pb.set(3, 2, hex(C.lilacDeep)); pb.set(2, 2, hex(C.flowerCenter));
+  return pb;
 }
 
 function cropToContent(pb: PixelBuffer): { pb: PixelBuffer; x: number; y: number } {

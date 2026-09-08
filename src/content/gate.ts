@@ -21,6 +21,8 @@ export const gate = {
 
   enterHint: 'Enter ↵ para continuar',
   moveHint: 'Flechas para caminar · J para mirar de cerca',
-  stormHint: 'Cuidado con los rayos y los árboles: si te alcanzan, vuelves al inicio',
-  breakHint: 'J para romper el tronco',
+  stormHint: 'Cuidado con los rayos y los árboles: si te alcanzan, vuelves al inicio · Shift para correr',
+  breakHint: 'J para romper el tronco: con el marcador al centro, golpeas fuerte',
+  shelterHint: 'Bajo el toldo del kiosco los rayos no te alcanzan',
+  flowerHint: 'Una flor de lila. Llévala contigo.',
 };

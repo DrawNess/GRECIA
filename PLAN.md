@@ -12,7 +12,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   (80×45, niebla y luz encima). El "desenfoque de ensueño" es una máscara
   radial entre `soft` y `crisp`: costo cero.
 - **Controles (juego):** flechas / WASD mover · J (también Espacio / Enter)
-  acción · K / Esc cancelar.
+  acción · Shift / K correr · Esc cancelar · M silencio.
 - **Perspectiva del juego:** vista lateral 2.5D con plano de suelo y parallax.
   (La escena del menú es una ilustración frontal, cámara baja.)
 - **Hosting:** GitHub Pages con GitHub Actions. Repo público → las respuestas
@@ -54,8 +54,15 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   está debajo, la lastiman → fundido y vuelta al menú (subtítulo "otra vez,
   con calma"). El tronco caído cierra la vereda y **se rompe con J** (3
   golpes). Además caen **rayos** cerca de ella con aviso en el suelo (mancha
-  de luz que palpita ~0,8 s); si la alcanzan → vuelta al menú. Cada tronco
-  roto amaina la lluvia y abre las nubes; con el último, la tormenta pasa.
+  de luz que palpita ~0,8 s); si la alcanzan → vuelta al menú. **Ramas**
+  que caen rápido (sombra chica): si la alcanzan solo tropieza. **Correr**
+  con Shift/K (aliento limitado). **Kiosco rojo** con toldo a rayas: bajo el
+  toldo no llegan rayos ni ramas. **Romper con ritmo**: sobre el tronco hay
+  una barra con un marcador; J con el marcador al centro golpea fuerte (1,5),
+  fuera apenas (0,5); vida 3. Cada tronco roto amaina la lluvia; con el
+  último la tormenta pasa del todo y aparece **la flor de lila** en el
+  camino: con J la recoge y **la lleva en la mano** desde entonces (brilla
+  suave). Servirá para abrir una puerta al final (Jhammil lo explicará).
 - Tramo 4 (noche): tercer árbol, farol y **la banca grande con Jhammil**
   sentado (cabello corto, camisa blanca, un poco más alto que ella); su nombre
   aparece en una etiqueta al acercarse. Con J junto a la banca, Grecia se sienta a su

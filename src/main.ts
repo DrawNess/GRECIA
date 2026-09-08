@@ -67,7 +67,9 @@ const step = (dt: number) => {
   audio.update(dt, scene.ambience());
   for (const e of scene.takeEvents()) {
     if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
-    else if (e === 'break') showCaption(stage.ui, gate.breakHint, 5000);
+    else if (e === 'break') showCaption(stage.ui, gate.breakHint, 6000);
+    else if (e === 'shelter') showCaption(stage.ui, gate.shelterHint, 5000);
+    else if (e === 'flower') showCaption(stage.ui, gate.flowerHint, 6000);
     else if (e === 'caught') backToMenu();
     else if (e.startsWith('sfx:thunder')) audio.thunder(Number(e.split(':')[2] ?? 1));
     else if (e === 'sfx:hit') audio.hit();

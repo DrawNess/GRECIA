@@ -1,4 +1,5 @@
-// Teclado: flechas / WASD para mover. J (también Espacio y Enter) = acción; K y Esc = cancelar.
+// Teclado: flechas / WASD para mover. J (también Espacio y Enter) = acción;
+// Shift o K mantenidas = correr; Esc = cancelar.
 const MOVE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], KeyA: [-1, 0],
   ArrowRight: [1, 0], KeyD: [1, 0],
@@ -6,7 +7,7 @@ const MOVE: Record<string, [number, number]> = {
   ArrowDown: [0, 1], KeyS: [0, 1],
 };
 export const ACTION = new Set(['KeyJ', 'Space', 'Enter']);
-export const CANCEL = new Set(['KeyK', 'Escape']);
+export const CANCEL = new Set(['Escape']);
 
 export class Input {
   private readonly down = new Set<string>();
@@ -17,7 +18,7 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       // Mientras ella escribe en el menú, el teclado es del formulario.
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
-      if (MOVE[e.code] || ACTION.has(e.code) || CANCEL.has(e.code)) e.preventDefault();
+      if (MOVE[e.code] || ACTION.has(e.code) || CANCEL.has(e.code) || e.code === 'KeyK') e.preventDefault();
       if (!e.repeat) this.pressed.add(e.code);
       this.down.add(e.code);
     });
@@ -33,6 +34,11 @@ export class Input {
       if (m) { x += m[0]; y += m[1]; }
     }
     return [Math.sign(x), Math.sign(y)];
+  }
+
+  /** Shift o K mantenidas: correr. */
+  get running(): boolean {
+    return this.down.has('ShiftLeft') || this.down.has('ShiftRight') || this.down.has('KeyK');
   }
 
   /** Consume las pulsaciones acumuladas de un conjunto de teclas. */
