@@ -4,6 +4,7 @@
 export const gate = {
   title: 'Grecia',
   subtitle: 'un paseo entre lilas',
+  subtitleAgain: 'otra vez, con calma',
 
   namePrompt: 'Escribe tu nombre completo',
   namePlaceholder: 'EN MAYÚSCULAS',
@@ -21,4 +22,5 @@ export const gate = {
   enterHint: 'Enter ↵ para continuar',
   moveHint: 'Flechas para caminar · J para mirar de cerca',
   stormHint: 'Esquiva lo que cae · J para romper lo que estorba',
+  beesHint: 'Cuidado con las abejas: si te tocan, vuelves al inicio',
 };

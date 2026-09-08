@@ -29,7 +29,9 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
    la cámara, y Grecia queda bajo control.
 3. **Paseo** de 2080 px (6½ pantallas) con cámara suave y parallax:
    - Tramo 1 (día): el árbol grande, arbustos.
-   - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol.
+   - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol y **las
+     abejas**: minijuego suave de esquivar; si una toca a Grecia, fundido y
+     vuelta al menú (`#again` cambia el subtítulo a "otra vez, con calma").
    - Tramo 3 (noche): **la esquina verde** — pared verde, y pegada a ella
      **su casa** (puerta con luz en el portal, ventana encendida, cámara de
      seguridad con luz roja); a la derecha la calle que entra, con un poste
@@ -119,6 +121,9 @@ scripts/hash.mjs           `pnpm hash`
 - **Bichos** (`critters`): mariposas, pájaros, pétalos, corazones, "z".
 - **Chimuelo** (`dragon`): estados sleep → wake → fly → gone → sleep.
   Sprites procedimentales en `renderDragon()`.
+- **Abejas** (`updateBees`): patrullan con senos lentos (x ±42, y 135–177);
+  colisión con el rectángulo del cuerpo de Grecia → evento `caught` → main
+  funde el velo y recarga con `#again`.
 - **Tormenta** (`updateStorm`): `stormAt(x)` da la intensidad por posición;
   `broken` (marañas rotas) la reduce. Lluvia en pantalla (`rain`), gotas
   pesadas en mundo (`drops`, con sombra que crece), relámpago (`bolt` +
@@ -146,6 +151,8 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   lado, su casa (la única con cámara). Ahí pasaban más tiempo; hasta ahí la
   acompañaba él. Era de noche.
 - **La banca**: grande; él sentado; ella llega, se sienta y se miran.
+- **Las abejas**: minijuego suave de esquivar en el atardecer; tocar una
+  abeja manda de vuelta al menú (pedido de Jhammil).
 - **La tormenta**: entre la esquina verde y la banca, una parte triste con
   lluvia y relámpagos que representa los problemas; esquivar lo que cae y
   romper lo que estorba = pasar los problemas.

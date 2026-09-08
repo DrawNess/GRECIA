@@ -26,6 +26,10 @@ const stormAt = (x: number) => {
   return Math.min(inA, outA);
 };
 const BARRIERS = [1250, 1400, 1550];
+// Las abejas: minijuego suave de esquivar en el atardecer. Si una toca a
+// Grecia, se vuelve al menú.
+const BEES = { x0: 330, x1: 600 };
+const BEE_HOMES = [372, 430, 486, 548];
 const BENCH = { x: 1830, baseY: 165 };
 // Chimuelo duerme después de la banca, sobre el pasto.
 const DRAGON = { x: 1940, baseY: 164, w: 44, h: 30 };
@@ -55,6 +59,7 @@ interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; c
 interface Rain { x: number; y: number; v: number }
 interface Drop { x: number; groundY: number; h: number; v: number }
 interface Bolt { pts: Pt[]; t: number }
+interface Bee { hx: number; ph: number; phY: number; x: number; y: number }
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type DragonState = 'sleep' | 'wake' | 'fly' | 'gone';
@@ -107,6 +112,9 @@ export class TitleScene {
   private nextDrop = 1.5;
   private broken = 0;
   private stormSeen = false;
+  private beesSeen = false;
+  private caught = false;
+  private readonly bees: Bee[] = BEE_HOMES.map((hx, i) => ({ hx, ph: i * 1.7, phY: i * 2.3, x: hx, y: 155 }));
   private readonly events: string[] = [];
   private camX = 0;
   private mode: 'menu' | 'game' = 'menu';
@@ -453,6 +461,27 @@ export class TitleScene {
     }
   }
 
+  // Abejas: patrullan despacio de lado a lado y suben y bajan cruzando toda la
+  // franja de suelo; se pasa cuando dejan hueco. Si una toca a Grecia, se
+  // avisa a la interfaz y se vuelve al menú.
+  private updateBees(): void {
+    const p = this.player;
+    if (!this.beesSeen && p.x > BEES.x0 - 40) { this.beesSeen = true; this.events.push('bees'); }
+    for (const b of this.bees) {
+      b.x = b.hx + Math.sin(this.t * 0.55 + b.ph) * 42;
+      b.y = 156 + Math.sin(this.t * 1.15 + b.phY) * 21;
+    }
+    if (this.caught || p.sitting) return;
+    for (const b of this.bees) {
+      if (b.x >= p.x + 3 && b.x <= p.x + 9 && b.y >= p.y + 3 && b.y <= p.y + 21) {
+        this.caught = true;
+        p.moving = false; p.stun = 99;
+        this.events.push('caught');
+        return;
+      }
+    }
+  }
+
   // Golpe a una maraña: se agrieta, y al tercer golpe se deshace. Con cada
   // problema roto la tormenta amaina un poco.
   private hitBarrier(pr: Prop): void {
@@ -556,6 +585,7 @@ export class TitleScene {
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
       this.updateDragon(dt);
       this.updateStorm(dt);
+      this.updateBees();
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
         const f = this.flyers[i];
@@ -685,6 +715,17 @@ export class TitleScene {
       crisp.globalAlpha = 1;
     }
 
+    if (this.mode === 'game') {
+      for (const b of this.bees) {
+        const x = Math.round(b.x) - cam, y = Math.round(b.y);
+        if (x < -6 || x > VW + 6) continue;
+        const wing = Math.floor(this.t * 14) & 1;
+        crisp.fillStyle = '#dff1ff'; crisp.fillRect(x - 1, y - 2 - wing, 2, 1); crisp.fillRect(x + 1, y - 2 + wing, 2, 1);
+        crisp.fillStyle = '#f2c94c'; crisp.fillRect(x - 2, y - 1, 5, 3);
+        crisp.fillStyle = '#2b2530'; crisp.fillRect(x - 1, y - 1, 1, 3); crisp.fillRect(x + 1, y - 1, 1, 3); crisp.fillRect(x + 3, y, 1, 1);
+        crisp.fillStyle = '#ffffff'; crisp.fillRect(x - 2, y - 1, 1, 1);
+      }
+    }
     if (this.nearProp && this.mode === 'game' && !this.player.sitting) {
       const m = this.nearProp;
       crisp.drawImage(this.marker, m.cx - cam - 4, m.baseY - m.r * 2 - 14 + Math.round(Math.sin(this.t * 4) * 1.2));

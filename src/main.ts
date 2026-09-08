@@ -22,6 +22,10 @@ const stage = new Stage();
 const scene = new TitleScene();
 const input = new Input();
 
+// Entrada en fundido desde crema (setTimeout: no depende de que rAF esté activo).
+const veil = document.getElementById('veil')!;
+setTimeout(() => veil.classList.add('is-gone'), 80);
+
 // Favicon: la ramita de lila escalada sin suavizado.
 const fav = document.createElement('canvas');
 fav.width = 48; fav.height = 48;
@@ -42,8 +46,19 @@ stage.ui.appendChild(tagEl);
 const step = (dt: number) => {
   scene.update(dt, input);
   input.endFrame();
-  for (const e of scene.takeEvents()) if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
+  for (const e of scene.takeEvents()) {
+    if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
+    else if (e === 'bees') showCaption(stage.ui, gate.beesHint, 6000);
+    else if (e === 'caught') backToMenu();
+  }
 };
+
+// Una abeja la tocó: fundido a crema y de vuelta al menú.
+function backToMenu(): void {
+  veil.style.transitionDuration = '0.7s';
+  veil.classList.remove('is-gone');
+  setTimeout(() => { location.hash = '#again'; location.reload(); }, 850);
+}
 const draw = () => {
   scene.render(stage.crisp, stage.soft, stage.haze);
   const tag = scene.nameTag();
@@ -72,7 +87,6 @@ mountGate(stage.ui, fav.toDataURL(), () => {
   writeSave({ unlocked: true });
   enterGame(true);
 });
+if (location.hash === '#again') history.replaceState(null, '', location.pathname + location.search);
 
-// Entrada en fundido desde crema (setTimeout: no depende de que rAF esté activo).
-const veil = document.getElementById('veil')!;
-setTimeout(() => veil.classList.add('is-gone'), 80);
+

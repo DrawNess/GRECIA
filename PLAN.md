@@ -40,7 +40,10 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
   faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
 - Tramo 1 (día): el árbol grande, arbustos.
-- Tramo 2 (atardecer): farol, segundo árbol.
+- Tramo 2 (atardecer, x 330–600): farol, segundo árbol y **las abejas**:
+  minijuego suave de esquivar (cuatro abejas que suben y bajan despacio; se
+  pasa cuando dejan hueco). Si una toca a Grecia: fundido a crema y vuelta
+  al menú (subtítulo "otra vez, con calma"). Aviso al entrar a la zona.
 - Tramo 3 (noche, x 600–1046): **la esquina verde** — la pared verde de su
   casa a la entrada de la calle, donde más tiempo pasaban y hasta donde él la
   acompañaba: pavimento, la pared verde con enredadera, y pegada a ella **su

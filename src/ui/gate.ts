@@ -10,7 +10,7 @@ export function mountGate(root: HTMLElement, iconUrl: string, onUnlocked: () => 
     <header class="panel__head">
       <img class="sprig" src="${iconUrl}" alt="">
       <h1 class="title">${gate.title}</h1>
-      <p class="subtitle">${gate.subtitle}</p>
+      <p class="subtitle">${location.hash === '#again' ? gate.subtitleAgain : gate.subtitle}</p>
     </header>
     <div class="rule"></div>
     <form class="step" id="step-name" autocomplete="off" novalidate>
