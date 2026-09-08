@@ -29,17 +29,18 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
    la cámara, y Grecia queda bajo control.
 3. **Paseo** de 2080 px (6½ pantallas) con cámara suave y parallax:
    - Tramo 1 (día): el árbol grande, arbustos.
-   - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol y **las
-     abejas**: minijuego suave de esquivar; si una toca a Grecia, fundido y
-     vuelta al menú (`#again` cambia el subtítulo a "otra vez, con calma").
+   - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol.
    - Tramo 3 (noche): **la esquina verde** — pared verde, y pegada a ella
      **su casa** (puerta con luz en el portal, ventana encendida, cámara de
      seguridad con luz roja); a la derecha la calle que entra, con un poste
      de luz al centro.
    - Tramo 3½ (noche): **la tormenta** — los problemas. Nubes, lluvia,
-     relámpagos, charcos. Minijuego: esquivar gotas pesadas (si la alcanzan,
-     tropieza) y romper con J tres marañas que cierran la vereda (3 golpes
-     cada una); con cada una rota amaina la lluvia y se abren las nubes.
+     relámpagos, charcos. Minijuego: tres árboles muertos que crujen y se
+     desploman cruzando la vereda al acercarse (si la aplastan → vuelta al
+     menú con `#again`, subtítulo "otra vez, con calma"); el tronco caído se
+     rompe con J (3 golpes). Rayos dirigidos con aviso en el suelo (si la
+     alcanzan → vuelta al menú). Con cada tronco roto amaina la lluvia y se
+     abren las nubes.
    - Tramo 4 (noche): tercer árbol, farol, **la banca grande con Jhammil**
      sentado; con J Grecia se sienta a su lado y se miran (etiqueta con su
      nombre). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
@@ -121,15 +122,15 @@ scripts/hash.mjs           `pnpm hash`
 - **Bichos** (`critters`): mariposas, pájaros, pétalos, corazones, "z".
 - **Chimuelo** (`dragon`): estados sleep → wake → fly → gone → sleep.
   Sprites procedimentales en `renderDragon()`.
-- **Abejas** (`updateBees`): patrullan con senos lentos (x ±42, y 135–177);
-  colisión con el rectángulo del cuerpo de Grecia → evento `caught` → main
-  funde el velo y recarga con `#again`.
 - **Tormenta** (`updateStorm`): `stormAt(x)` da la intensidad por posición;
-  `broken` (marañas rotas) la reduce. Lluvia en pantalla (`rain`), gotas
-  pesadas en mundo (`drops`, con sombra que crece), relámpago (`bolt` +
-  `flash`), tinte gris-azul en `haze`, nubes en la capa media
-  (`paintStormClouds`, alpha según `broken`). Marañas = props `barrier` con
-  `hp` y `variants` (`renderBarrier`); `hitBarrier()` las rompe.
+  `broken` (troncos rotos) la reduce. Lluvia en pantalla (`rain`), relámpagos
+  ambientales (`bolt` + `flash`), rayos dirigidos (`strikes`: aviso 0,85 s y
+  caída; `hurt()` si alcanza a Grecia), tinte gris-azul en `haze`, nubes en
+  la capa media (`paintStormClouds`, alpha según `broken`). Árboles muertos =
+  props `barrier` con estado `tree` (stand → shake → fall → down): de pie
+  (`renderDeadTree`), al caer se vuelven tronco tendido (`renderFallenTrunk`
+  por `hp`) sólido; `hitBarrier()` lo rompe. `hurt()` → evento `caught` →
+  main funde el velo y recarga con `#again`.
 - **Menú**: la composición a cámara 0 se enmascara (`menuBack`); en el juego
   se compone en vivo cada cuadro (`compose()`).
 
@@ -151,11 +152,11 @@ fila tiene otro largo. Los personajes miden 12×23 (de pie) y 12×26
   lado, su casa (la única con cámara). Ahí pasaban más tiempo; hasta ahí la
   acompañaba él. Era de noche.
 - **La banca**: grande; él sentado; ella llega, se sienta y se miran.
-- **Las abejas**: minijuego suave de esquivar en el atardecer; tocar una
-  abeja manda de vuelta al menú (pedido de Jhammil).
 - **La tormenta**: entre la esquina verde y la banca, una parte triste con
-  lluvia y relámpagos que representa los problemas; esquivar lo que cae y
-  romper lo que estorba = pasar los problemas.
+  lluvia y relámpagos que representa los problemas; esquivar árboles que caen
+  y rayos, y romper los troncos = pasar los problemas. Si algo la alcanza,
+  vuelve al menú (pedido de Jhammil). Nada de abejas u otras cosas ajenas a
+  la historia.
 - **Chimuelo**: dragón negro dormido después de la banca; despierta con
   ella, corazones, y vuela.
 - Tecla de interacción: **J** (decisión de Jhammil).

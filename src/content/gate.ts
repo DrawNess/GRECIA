@@ -21,6 +21,6 @@ export const gate = {
 
   enterHint: 'Enter ↵ para continuar',
   moveHint: 'Flechas para caminar · J para mirar de cerca',
-  stormHint: 'Esquiva lo que cae · J para romper lo que estorba',
-  beesHint: 'Cuidado con las abejas: si te tocan, vuelves al inicio',
+  stormHint: 'Cuidado con los rayos y los árboles: si te alcanzan, vuelves al inicio',
+  breakHint: 'J para romper el tronco',
 };

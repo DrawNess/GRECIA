@@ -48,12 +48,12 @@ const step = (dt: number) => {
   input.endFrame();
   for (const e of scene.takeEvents()) {
     if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
-    else if (e === 'bees') showCaption(stage.ui, gate.beesHint, 6000);
+    else if (e === 'break') showCaption(stage.ui, gate.breakHint, 5000);
     else if (e === 'caught') backToMenu();
   }
 };
 
-// Una abeja la tocó: fundido a crema y de vuelta al menú.
+// Algo la lastimó: fundido a crema y de vuelta al menú.
 function backToMenu(): void {
   veil.style.transitionDuration = '0.7s';
   veil.classList.remove('is-gone');

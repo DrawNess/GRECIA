@@ -25,11 +25,9 @@ const stormAt = (x: number) => {
   const outA = Math.min(1, Math.max(0, (STORM.x1 - x) / 100));
   return Math.min(inA, outA);
 };
+// Árboles muertos junto a la vereda: se desploman al acercarse; el tronco
+// caído se rompe con J.
 const BARRIERS = [1250, 1400, 1550];
-// Las abejas: minijuego suave de esquivar en el atardecer. Si una toca a
-// Grecia, se vuelve al menú.
-const BEES = { x0: 330, x1: 600 };
-const BEE_HOMES = [372, 430, 486, 548];
 const BENCH = { x: 1830, baseY: 165 };
 // Chimuelo duerme después de la banca, sobre el pasto.
 const DRAGON = { x: 1940, baseY: 164, w: 44, h: 30 };
@@ -54,12 +52,13 @@ interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; p
 // Objeto en el suelo (coordenadas de mundo). `baseY` decide el orden de dibujo.
 type Secret = 'none' | 'butterflies' | 'birds';
 type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier';
-interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number }; hp?: number; variants?: HTMLCanvasElement[] }
-// Lluvia (pantalla), gota pesada que cae (mundo) y relámpago.
+interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number }; hp?: number; variants?: HTMLCanvasElement[]; tree?: TreeState; t?: number; standing?: HTMLCanvasElement }
+// Lluvia (pantalla) y relámpago.
 interface Rain { x: number; y: number; v: number }
-interface Drop { x: number; groundY: number; h: number; v: number }
 interface Bolt { pts: Pt[]; t: number }
-interface Bee { hx: number; ph: number; phY: number; x: number; y: number }
+// Rayo dirigido: aviso en el suelo y luego cae.
+interface Strike { x: number; groundY: number; t: number }
+type TreeState = 'stand' | 'shake' | 'fall' | 'down';
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type DragonState = 'sleep' | 'wake' | 'fly' | 'gone';
@@ -105,16 +104,15 @@ export class TitleScene {
   // Tormenta.
   private readonly clouds: HTMLCanvasElement;
   private readonly rain: Rain[] = [];
-  private readonly drops: Drop[] = [];
   private bolt: Bolt | null = null;
   private flash = 0;
   private nextBolt = 4;
-  private nextDrop = 1.5;
   private broken = 0;
   private stormSeen = false;
-  private beesSeen = false;
   private caught = false;
-  private readonly bees: Bee[] = BEE_HOMES.map((hx, i) => ({ hx, ph: i * 1.7, phY: i * 2.3, x: hx, y: 155 }));
+  private breakSeen = false;
+  private readonly strikes: Strike[] = [];
+  private nextStrike = 3;
   private readonly events: string[] = [];
   private camX = 0;
   private mode: 'menu' | 'game' = 'menu';
@@ -197,11 +195,13 @@ export class TitleScene {
     // La banca grande, con Jhammil sentado mirando hacia donde llegará ella.
     this.addProp('bench', renderBench(JHAMMIL_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
     this.addProp('gate', renderGate(rng), 2052, 160, 16, { hw: 15, depth: 4 });
-    // Las marañas de la tormenta: cierran el camino hasta romperlas con J.
+    // Los árboles muertos de la tormenta: de pie junto a la vereda; caen al
+    // acercarse y el tronco cierra el camino hasta romperlo con J.
     for (const bx of BARRIERS) {
-      const variants = [3, 2, 1].map((hp) => renderBarrier(new Rng(bx), hp));
-      const pr = this.addProp('barrier', variants[0], bx, 181, 12, { hw: 8, depth: 34 });
-      pr.hp = 3; pr.variants = variants;
+      const variants = [3, 2, 1].map((hp) => renderFallenTrunk(new Rng(bx), hp));
+      const standing = renderDeadTree(new Rng(bx + 1));
+      const pr = this.addProp('barrier', standing, bx, 153, 12, { hw: 4, depth: 3 });
+      pr.hp = 3; pr.variants = variants; pr.standing = standing; pr.tree = 'stand'; pr.t = 0;
     }
     this.seated = GRECIA_SEATED.toCanvas();
     this.dragonImgs = {
@@ -386,6 +386,7 @@ export class TitleScene {
     for (const pr of this.props) {
       if (pr.kind !== 'bush' && pr.kind !== 'bench' && pr.kind !== 'barrier') continue;
       const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
+      if (pr.kind === 'barrier' && pr.tree !== 'down') continue;
       if (pr.kind === 'barrier' ? dx > 22 : dx > pr.r + 9 || dy > 14) continue;
       // La banca y las marañas tienen prioridad sobre los arbustos de alrededor.
       const d = dx + dy * 2 - (pr.kind === 'bush' ? 0 : 100);
@@ -461,28 +462,14 @@ export class TitleScene {
     }
   }
 
-  // Abejas: patrullan despacio de lado a lado y suben y bajan cruzando toda la
-  // franja de suelo; se pasa cuando dejan hueco. Si una toca a Grecia, se
-  // avisa a la interfaz y se vuelve al menú.
-  private updateBees(): void {
-    const p = this.player;
-    if (!this.beesSeen && p.x > BEES.x0 - 40) { this.beesSeen = true; this.events.push('bees'); }
-    for (const b of this.bees) {
-      b.x = b.hx + Math.sin(this.t * 0.55 + b.ph) * 42;
-      b.y = 156 + Math.sin(this.t * 1.15 + b.phY) * 21;
-    }
-    if (this.caught || p.sitting) return;
-    for (const b of this.bees) {
-      if (b.x >= p.x + 3 && b.x <= p.x + 9 && b.y >= p.y + 3 && b.y <= p.y + 21) {
-        this.caught = true;
-        p.moving = false; p.stun = 99;
-        this.events.push('caught');
-        return;
-      }
-    }
+  // Algo la lastimó: se queda quieta y la interfaz la manda de vuelta al menú.
+  private hurt(): void {
+    this.caught = true;
+    this.player.moving = false; this.player.stun = 99;
+    this.events.push('caught');
   }
 
-  // Golpe a una maraña: se agrieta, y al tercer golpe se deshace. Con cada
+  // Golpe a un tronco caído: se astilla, y al tercer golpe se parte. Con cada
   // problema roto la tormenta amaina un poco.
   private hitBarrier(pr: Prop): void {
     const r = this.rng;
@@ -490,7 +477,7 @@ export class TitleScene {
     pr.hp = (pr.hp ?? 1) - 1;
     const n = pr.hp > 0 ? 6 : 22;
     for (let i = 0; i < n; i++) {
-      this.critters.push({ kind: 'puff', x: pr.cx + r.range(-7, 7), y: pr.baseY - r.range(4, 34), vx: r.range(-45, 45), vy: r.range(-70, -10), ph: 0, t: 0, life: pr.hp > 0 ? 0.7 : 1.1, col: r.pick(['#3d3653', '#5a5070', '#1e1b2a']) });
+      this.critters.push({ kind: 'puff', x: pr.cx + r.range(-7, 7), y: pr.baseY - r.range(4, 34), vx: r.range(-45, 45), vy: r.range(-70, -10), ph: 0, t: 0, life: pr.hp > 0 ? 0.7 : 1.1, col: r.pick(['#6f5c55', '#8a746a', '#3f3430']) });
     }
     if (pr.hp > 0) { pr.img = pr.variants![3 - pr.hp]; return; }
     this.props.splice(this.props.indexOf(pr), 1);
@@ -514,21 +501,56 @@ export class TitleScene {
       d.y += d.v * dt; d.x -= 38 * dt;
       if (d.y > 165 + (d.x * 7) % 14) { d.y = r.range(-40, -4); d.x = r.range(-10, VW + 50); }
     }
-    // Gotas pesadas: caen cerca de Grecia, con sombra que avisa dónde.
-    this.nextDrop -= dt;
-    if (intensity > 0.15 && this.nextDrop <= 0 && !p.sitting) {
-      const x = Math.min(STORM.x1 - 30, Math.max(STORM.x0 + 30, p.x + r.range(-60, 100)));
-      this.drops.push({ x, groundY: r.range(HORIZON + 3, VH - 3), h: 170, v: r.range(95, 130) });
-      this.nextDrop = r.range(0.55, 1.3) / Math.max(0.35, intensity);
+    // Árboles muertos: crujen al acercarse, caen cruzando la vereda.
+    for (const pr of this.props) {
+      if (pr.kind !== 'barrier' || !pr.tree || pr.tree === 'down') continue;
+      const fx = p.x + GIRL_W / 2;
+      if (pr.tree === 'stand') {
+        if (fx > pr.cx - 76 && fx < pr.cx + 14) { pr.tree = 'shake'; pr.t = 0; }
+        continue;
+      }
+      pr.t = (pr.t ?? 0) + dt;
+      if (pr.tree === 'shake') {
+        pr.shake = 0.3;
+        if (r.next() < 0.3) this.critters.push({ kind: 'puff', x: pr.cx + r.range(-6, 6), y: pr.baseY - r.range(10, 36), vx: r.range(-15, 15), vy: r.range(-10, 20), ph: 0, t: 0, life: 0.5, col: '#6f5c55' });
+        if (pr.t > 1.2) { pr.tree = 'fall'; pr.t = 0; pr.shake = 0; }
+      } else if (pr.tree === 'fall' && pr.t > 0.45) {
+        // Aterriza cruzando la vereda: ahora es un tronco que bloquea el paso.
+        pr.tree = 'down'; pr.t = 0;
+        pr.img = pr.variants![0];
+        pr.baseY = 181; pr.y = 181 - pr.img.height + 3; pr.x = pr.cx - (pr.img.width >> 1);
+        pr.solid = { hw: 8, depth: 34 };
+        this.flash = Math.max(this.flash, 0.35);
+        for (let k = 0; k < 14; k++) this.critters.push({ kind: 'puff', x: pr.cx + r.range(-10, 10), y: r.range(152, 180), vx: r.range(-40, 40), vy: r.range(-45, -5), ph: 0, t: 0, life: 0.7, col: r.pick(['#6f5c55', '#8a746a', '#3f3430']) });
+        if (!this.breakSeen) { this.breakSeen = true; this.events.push('break'); }
+        const fy = p.y + GIRL_H - 1;
+        if (!this.caught && Math.abs(fx - pr.cx) < 11 && fy > 148 && fy < 182) this.hurt();
+      }
     }
-    for (let i = this.drops.length - 1; i >= 0; i--) {
-      const d = this.drops[i];
-      d.h -= d.v * dt;
-      if (d.h > 0) continue;
-      this.drops.splice(i, 1);
-      for (let k = 0; k < 6; k++) this.critters.push({ kind: 'puff', x: d.x + r.range(-3, 3), y: d.groundY - 1, vx: r.range(-30, 30), vy: r.range(-40, -12), ph: 0, t: 0, life: 0.5, col: r.pick(['#8f9ac4', '#b5bde0']) });
-      const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
-      if (p.stun <= 0 && Math.abs(fx - d.x) < 7 && Math.abs(fy - d.groundY) < 6) { p.stun = 0.7; p.knock = -70; p.moving = false; }
+    // Rayos dirigidos: aviso en el suelo y luego caen. Si alcanzan a Grecia, se vuelve al menú.
+    this.nextStrike -= dt;
+    if (intensity > 0.25 && this.nextStrike <= 0 && !p.sitting && !this.caught) {
+      const x = Math.min(STORM.x1 - 30, Math.max(STORM.x0 + 30, p.x + r.range(-50, 90)));
+      this.strikes.push({ x, groundY: r.range(HORIZON + 3, VH - 3), t: 0 });
+      this.nextStrike = r.range(2.6, 5) / Math.max(0.4, intensity);
+    }
+    for (let i = this.strikes.length - 1; i >= 0; i--) {
+      const st = this.strikes[i];
+      const before = st.t;
+      st.t += dt;
+      if (before < 0.85 && st.t >= 0.85) {
+        // Cae el rayo.
+        const pts: Pt[] = [[st.x - this.camX + r.range(-10, 10), -2]];
+        let x = pts[0][0], y = 0;
+        while (y < st.groundY - 12) { x += (st.x - this.camX - x) * 0.35 + r.range(-8, 8); y += r.range(10, 16); pts.push([x, y]); }
+        pts.push([st.x - this.camX, st.groundY]);
+        this.bolt = { pts, t: 0 };
+        this.flash = 1;
+        for (let k = 0; k < 10; k++) this.critters.push({ kind: 'puff', x: st.x + r.range(-4, 4), y: st.groundY - 1, vx: r.range(-50, 50), vy: r.range(-60, -10), ph: 0, t: 0, life: 0.5, col: r.pick(['#fff6c8', '#ffe27a']) });
+        const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
+        if (!this.caught && Math.abs(fx - st.x) < 9 && Math.abs(fy - st.groundY) < 7) this.hurt();
+      }
+      if (st.t > 1.7) this.strikes.splice(i, 1);
     }
     // Relámpagos mientras la tormenta esté fuerte.
     this.nextBolt -= dt;
@@ -585,7 +607,6 @@ export class TitleScene {
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
       this.updateDragon(dt);
       this.updateStorm(dt);
-      this.updateBees();
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
         const f = this.flyers[i];
@@ -646,20 +667,33 @@ export class TitleScene {
     const cloudA = 1 - 0.85 * (this.broken / BARRIERS.length);
     if (cloudA > 0.02) { ctx.globalAlpha = cloudA; ctx.drawImage(this.clouds, -Math.round(this.camX * PAR_MID), 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.world, -cam, 0);
-    // Sombras de las gotas que están por caer.
-    for (const d of this.drops) {
-      const rx = 2 + 4 * (1 - d.h / 170);
-      ctx.fillStyle = 'rgba(20,18,40,0.35)';
-      ctx.beginPath(); ctx.ellipse(d.x - cam, d.groundY, rx, Math.max(1, rx * 0.45), 0, 0, 6.2832); ctx.fill();
-    }
-
     type Drawable = { baseY: number; draw: () => void };
     const items: Drawable[] = [];
     for (const pr of this.props) {
       const sx = pr.x - cam;
       if (sx > VW || sx + pr.img.width < 0) continue;
       const shake = pr.shake > 0 ? Math.round(Math.sin(pr.shake * 40) * 1.5) : 0;
+      if (pr.tree === 'fall') {
+        // Se desploma hacia la vereda: el árbol de pie se aplasta y aparece el tronco tendido.
+        const k = Math.min(1, (pr.t ?? 0) / 0.45);
+        const lying = pr.variants![0];
+        items.push({ baseY: 181, draw: () => {
+          const h = Math.max(1, Math.round(pr.standing!.height * (1 - k)));
+          ctx.drawImage(pr.standing!, sx, pr.baseY + 3 - h, pr.standing!.width, h);
+          if (k > 0.4) { ctx.globalAlpha = (k - 0.4) / 0.6; ctx.drawImage(lying, pr.cx - cam - (lying.width >> 1), 181 - lying.height + 3); ctx.globalAlpha = 1; }
+        } });
+        continue;
+      }
       items.push({ baseY: pr.baseY, draw: () => ctx.drawImage(pr.img, sx + shake, pr.y) });
+    }
+    // Aviso de rayo: mancha de luz que palpita donde va a caer.
+    for (const st of this.strikes) {
+      if (st.t >= 0.85) continue;
+      const a = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(st.t * 22));
+      ctx.fillStyle = `rgba(255,246,200,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(st.x - cam, st.groundY, 9, 3, 0, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = `rgba(255,246,200,${(a * 0.5).toFixed(3)})`;
+      ctx.fillRect(Math.round(st.x - cam), st.groundY - 40, 1, 40);
     }
     const d = this.dragon;
     if (d.state !== 'gone') {
@@ -715,17 +749,6 @@ export class TitleScene {
       crisp.globalAlpha = 1;
     }
 
-    if (this.mode === 'game') {
-      for (const b of this.bees) {
-        const x = Math.round(b.x) - cam, y = Math.round(b.y);
-        if (x < -6 || x > VW + 6) continue;
-        const wing = Math.floor(this.t * 14) & 1;
-        crisp.fillStyle = '#dff1ff'; crisp.fillRect(x - 1, y - 2 - wing, 2, 1); crisp.fillRect(x + 1, y - 2 + wing, 2, 1);
-        crisp.fillStyle = '#f2c94c'; crisp.fillRect(x - 2, y - 1, 5, 3);
-        crisp.fillStyle = '#2b2530'; crisp.fillRect(x - 1, y - 1, 1, 3); crisp.fillRect(x + 1, y - 1, 1, 3); crisp.fillRect(x + 3, y, 1, 1);
-        crisp.fillStyle = '#ffffff'; crisp.fillRect(x - 2, y - 1, 1, 1);
-      }
-    }
     if (this.nearProp && this.mode === 'game' && !this.player.sitting) {
       const m = this.nearProp;
       crisp.drawImage(this.marker, m.cx - cam - 4, m.baseY - m.r * 2 - 14 + Math.round(Math.sin(this.t * 4) * 1.2));
@@ -772,12 +795,7 @@ export class TitleScene {
       crisp.fillRect(this.cameraLed[0] - cam, this.cameraLed[1], 1, 1);
     }
 
-    // Tormenta: gotas pesadas cayendo, lluvia, relámpago y destello.
-    for (const d of this.drops) {
-      const x = Math.round(d.x) - cam, y = Math.round(d.groundY - d.h);
-      crisp.fillStyle = '#3a3f6e'; crisp.fillRect(x - 1, y - 4, 3, 4); crisp.fillRect(x, y - 6, 1, 2);
-      crisp.fillStyle = '#7f88c4'; crisp.fillRect(x - 1, y - 3, 1, 2);
-    }
+    // Tormenta: lluvia, relámpagos, rayos con aviso y destello.
     if (this.rain.length) {
       crisp.fillStyle = 'rgba(205,214,242,0.55)';
       for (const d of this.rain) { const x = Math.round(d.x), y = Math.round(d.y); crisp.fillRect(x, y, 1, 3); crisp.fillRect(x - 1, y + 3, 1, 3); }
@@ -1413,28 +1431,45 @@ function paintPuddles(pb: PixelBuffer, rng: Rng): void {
   }
 }
 
-// Maraña oscura (un problema): tallos enredados con espinas. Con menos vida,
-// menos tallos y grietas claras.
-function renderBarrier(rng: Rng, hp: number): HTMLCanvasElement {
-  const pb = new PixelBuffer(22, 46);
-  pb.ellipse(11, 44, 10, 2, hex('#1a1826', 110));
-  const dark = hex('#1e1b2a'), mid = hex('#2f2a42'), light = hex('#4a4262');
-  const stems = 3 + hp;
-  for (let s = 0; s < stems; s++) {
-    let x = rng.range(4, 18), y = 43;
-    const drift = rng.range(-0.8, 0.8);
-    while (y > 6 + rng.int(8)) {
-      const r = y > 30 ? 2 : 1;
-      pb.circle(x, y, r + 1, dark); pb.circle(x - 1, y, r, y % 3 === 0 ? light : mid);
-      if (rng.next() < 0.25) { const tx = x + (rng.next() < 0.5 ? -3 : 3); pb.set(tx, y, hex('#7a6f8a')); pb.set(tx + (tx > x ? -1 : 1), y, mid); }
-      x += drift + rng.range(-1.5, 1.5); y -= 2;
-      if (x < 2) x = 2; if (x > 19) x = 19;
+// Árbol muerto, de pie: tronco seco y ramas peladas (un problema esperando).
+function renderDeadTree(rng: Rng): HTMLCanvasElement {
+  const pb = new PixelBuffer(30, 48);
+  const dark = hex('#3f3430'), bark = hex('#5a4a44'), light = hex('#6f5c55');
+  pb.ellipse(15, 46, 8, 2, hex(C.shadow, 70));
+  for (let y = 45; y >= 14; y--) {
+    const t = (45 - y) / 31;
+    const half = Math.round(3 - 1.6 * t);
+    const cx = 15 + Math.round(Math.sin(t * 3) * 1.5);
+    pb.hline(cx - half - 1, cx + half + 1, y, dark); pb.hline(cx - half, cx + half - 1, y, bark); pb.set(cx - half, y, light);
+  }
+  const branches: [Pt, Pt][] = [[[14, 30], [3, 16]], [[16, 24], [27, 10]], [[15, 18], [9, 4]], [[15, 22], [22, 20]], [[14, 36], [5, 34]]];
+  for (const [a, b] of branches) {
+    for (let t = 0; t <= 1; t += 0.05) {
+      const x = Math.round(a[0] + (b[0] - a[0]) * t), y = Math.round(a[1] + (b[1] - a[1]) * t);
+      pb.rect(x - 1, y, t < 0.5 ? 2 : 1, 2, dark); if (t < 0.6) pb.set(x, y, bark);
     }
+    if (rng.next() < 0.7) { pb.set(b[0] + 1, b[1] - 2, dark); pb.set(b[0] - 2, b[1] - 1, dark); }
   }
-  for (let i = 0; i < (3 - hp) * 6; i++) {
-    const x = rng.range(3, 19), y = rng.range(8, 40);
-    pb.set(Math.round(x), Math.round(y), hex('#9a90b8')); pb.set(Math.round(x) + 1, Math.round(y) + 1, hex('#c9bfe0'));
+  return pb.toCanvas();
+}
+
+// Tronco caído cruzando la vereda (de arriba abajo). Con menos vida, más astillado.
+function renderFallenTrunk(rng: Rng, hp: number): HTMLCanvasElement {
+  const pb = new PixelBuffer(18, 38);
+  const dark = hex('#3f3430'), bark = hex('#5a4a44'), light = hex('#6f5c55'), pale = hex('#8a746a');
+  pb.ellipse(9, 36, 8, 2, hex(C.shadow, 80));
+  for (let y = 2; y < 36; y++) {
+    const half = 4 + (y < 8 ? 1 : 0);
+    pb.hline(9 - half - 1, 9 + half + 1, y, dark); pb.hline(9 - half, 9 + half, y, bark);
+    if (y % 5 === 0) pb.hline(9 - half, 9 + half - 2, y, light);
   }
+  pb.ellipse(9, 2, 6, 2, dark); pb.ellipse(9, 2, 4, 1, pale); pb.rect(9, 2, 1, 1, dark); // corte de la raíz
+  for (const [y, dir] of [[10, -1], [19, 1], [27, -1]] as Pt[]) { pb.rect(dir < 0 ? 1 : 13, y, 4, 2, dark); pb.rect(dir < 0 ? 2 : 13, y, 3, 1, bark); }
+  for (let i = 0; i < (3 - hp) * 7; i++) {
+    const x = 5 + rng.int(9), y = 4 + rng.int(30);
+    pb.set(x, y, pale); pb.set(x + 1, y + 1, hex('#b39c8e'));
+  }
+  if (hp === 1) for (let y = 8; y < 30; y += 2) pb.set(9 + (y % 4 === 0 ? 1 : 0), y, hex('#b39c8e'));
   return pb.toCanvas();
 }
 

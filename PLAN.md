@@ -40,10 +40,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
   faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
 - Tramo 1 (día): el árbol grande, arbustos.
-- Tramo 2 (atardecer, x 330–600): farol, segundo árbol y **las abejas**:
-  minijuego suave de esquivar (cuatro abejas que suben y bajan despacio; se
-  pasa cuando dejan hueco). Si una toca a Grecia: fundido a crema y vuelta
-  al menú (subtítulo "otra vez, con calma"). Aviso al entrar a la zona.
+- Tramo 2 (atardecer): farol, segundo árbol.
 - Tramo 3 (noche, x 600–1046): **la esquina verde** — la pared verde de su
   casa a la entrada de la calle, donde más tiempo pasaban y hasta donde él la
   acompañaba: pavimento, la pared verde con enredadera, y pegada a ella **su
@@ -52,10 +49,13 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   de luz al centro.
 - Tramo 3½ (noche, x 1100–1740): **la tormenta** — los problemas. Nubes
   oscuras (capa media, parallax), lluvia de lado, relámpagos con destello,
-  charcos. Minijuego: caen gotas pesadas (sombra en el suelo avisa dónde);
-  si alcanzan a Grecia tropieza y retrocede. Tres marañas oscuras cierran la
-  vereda: se rompen con J (3 golpes). Cada problema roto amaina la lluvia y
-  abre las nubes; con el último, la tormenta pasa.
+  charcos. Minijuego: tres **árboles muertos** junto a la vereda crujen al
+  acercarse (~1 s de aviso) y **se desploman cruzando el camino**; si Grecia
+  está debajo, la lastiman → fundido y vuelta al menú (subtítulo "otra vez,
+  con calma"). El tronco caído cierra la vereda y **se rompe con J** (3
+  golpes). Además caen **rayos** cerca de ella con aviso en el suelo (mancha
+  de luz que palpita ~0,8 s); si la alcanzan → vuelta al menú. Cada tronco
+  roto amaina la lluvia y abre las nubes; con el último, la tormenta pasa.
 - Tramo 4 (noche): tercer árbol, farol y **la banca grande con Jhammil**
   sentado (cabello corto, camisa blanca, un poco más alto que ella); su nombre
   aparece en una etiqueta al acercarse. Con J junto a la banca, Grecia se sienta a su
