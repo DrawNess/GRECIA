@@ -8,11 +8,14 @@ import { C } from '../art/palette';
 import { GRECIA, type DirSprites } from '../art/sprites';
 import { ACTION, type Input } from '../engine/input';
 import { story } from '../content/story';
+import { bigFloret } from '../art/lilac';
 
 type Phase = 'plant' | 'planting' | 'growing' | 'toLetter' | 'letter';
 type Pt = [number, number];
-interface Bloom { x: number; y: number; d: number; big: boolean; col: string; born: number }
+// Flor del mensaje o racimito del fondo: nace cuando la oleada la alcanza.
+interface Bloom { x: number; y: number; d: number; big: boolean; img: HTMLCanvasElement; born: number }
 interface Leaf { x: number; y: number; d: number; flip: boolean }
+interface Dew { x: number; y: number; ph: number }
 
 const PAPER = '#ecdfc4', PAPER_DARK = '#dfd0b0', PAPER_LIGHT = '#f5ecd8';
 const SEED: Pt = [160, 158];
@@ -34,7 +37,7 @@ const GLYPHS: Record<string, string[]> = {
   I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
 };
 const MESSAGE = ['TE AMO', 'MUCHO MUCHO', 'GRECIA'];
-const CELL = 4, ADV = 6 * CELL, LINE_TOPS = [14, 60, 106];
+const CELL = 4, ADV = 7 * CELL, LINE_TOPS = [12, 60, 108];
 
 const MARKER_ROWS = [
   '.OOOOOOO.', 'OWWWWWWWO', 'OWZZZZZWO', 'OWWWWZWWO', 'OWWWWZWWO', 'OWZWWZWWO', 'OWWZZZWWO', 'OWWWWWWWO', '.OOOOOOO.', '....O....',
@@ -52,6 +55,8 @@ export class FinaleScene {
   private readonly blooms: Bloom[] = [];
   private readonly leaves: Leaf[] = [];
   private readonly vines: Pt[][] = [];
+  private readonly dew: Dew[] = [];
+  private readonly leafImgs: HTMLCanvasElement[];
   private readonly rng = new Rng(2026);
   private readonly events: string[] = [];
   private px = 130; private py = 136; private facing: 'down' | 'right' | 'left' = 'down'; private moving = false; private walkT = 0;
@@ -94,33 +99,44 @@ export class FinaleScene {
     });
     this.letterLen = 60 + story.letter.length * 300 + 40;
 
-    // Objetivos de las flores: letras del mensaje + relleno pálido.
+    // Flores de verdad, pre-dibujadas: varias tallas y giros para las letras,
+    // racimitos pálidos para el fondo, hojas para las ramas.
+    const artRng = new Rng(77);
+    const letterFlowers: HTMLCanvasElement[] = [];
+    for (const S of [2.6, 3, 3.4]) for (const rot of [0.1, 0.5, 0.9, 1.3]) letterFlowers.push(renderFlowerCanvas(artRng, S, rot));
+    const fillClusters: HTMLCanvasElement[] = [];
+    for (const S of [1.8, 2.1, 2.4]) for (const rot of [0.2, 0.9]) fillClusters.push(renderFlowerCanvas(artRng, S, rot, 0.42));
+    this.leafImgs = [0, 1].map((f) => renderLeaf(f === 1));
+
     MESSAGE.forEach((line, li) => {
-      const w = line.length * ADV - CELL;
+      const w = line.length * ADV - 2 * CELL;
       const left = Math.round((VW - w) / 2);
       [...line].forEach((ch, ci) => {
         const g = GLYPHS[ch];
         if (!g) return;
         g.forEach((row, r) => [...row].forEach((bit, c) => {
           if (bit !== '1') return;
-          const x = left + ci * ADV + c * CELL + 2, y = LINE_TOPS[li] + r * CELL + 2;
-          this.blooms.push({ x, y, d: Math.hypot(x - SEED[0], y - SEED[1]) * 0.9 + li * 0, big: true, col: this.rng.pick([C.lilac, C.lilacMid, C.lilacDark, C.bud]), born: -1 });
+          const x = left + ci * ADV + c * CELL + 2 + this.rng.range(-0.6, 0.6), y = LINE_TOPS[li] + r * CELL + 2 + this.rng.range(-0.6, 0.6);
+          this.blooms.push({ x, y, d: Math.hypot(x - SEED[0], y - SEED[1]) * 0.9, big: true, img: this.rng.pick(letterFlowers), born: -1 });
+          if (this.rng.next() < 0.12) this.dew.push({ x: Math.round(x) - 1, y: Math.round(y) - 2, ph: this.rng.range(0, 6.28) });
         }));
       });
     });
-    for (let i = 0; i < 170; i++) {
-      const x = this.rng.range(4, VW - 4), y = this.rng.range(4, VH - 4);
-      if (this.nearText(x, y)) continue;
-      this.blooms.push({ x, y, d: Math.hypot(x - SEED[0], y - SEED[1]) + this.rng.range(0, 30), big: false, col: this.rng.pick([C.lilacPale, C.lilacLight, C.lilacLight]), born: -1 });
+    // Las flores de abajo se dibujan después: solapan a las de arriba, como en un racimo.
+    this.blooms.sort((a, b) => a.y - b.y);
+    for (let i = 0; i < 140; i++) {
+      const x = this.rng.range(6, VW - 6), y = this.rng.range(5, VH - 5);
+      if (this.nearText(x, y) || Math.hypot(x - SEED[0], y - SEED[1]) < 22) continue;
+      this.blooms.push({ x, y, d: Math.hypot(x - SEED[0], y - SEED[1]) + this.rng.range(0, 40), big: false, img: this.rng.pick(fillClusters), born: -1 });
     }
-    // Ramas que se abren desde el brote por toda la hoja.
-    const ends: Pt[] = [[24, 30], [80, 12], [160, 6], [240, 12], [296, 30], [14, 100], [306, 104], [60, 150], [260, 150]];
+    // Ramas de madera que se abren desde el brote hacia las tres líneas y los bordes.
+    const ends: Pt[] = [[40, 44], [110, 22], [160, 20], [212, 22], [282, 44], [24, 118], [298, 118], [70, 154], [250, 154]];
     for (const e of ends) {
-      const ctrl: Pt = [(SEED[0] + e[0]) / 2 + this.rng.range(-30, 30), (SEED[1] + e[1]) / 2 + this.rng.range(-10, 10)];
+      const ctrl: Pt = [(SEED[0] + e[0]) / 2 + this.rng.range(-26, 26), (SEED[1] + e[1]) / 2 + this.rng.range(-8, 8)];
       const pts: Pt[] = [];
-      for (let i = 0; i <= 40; i++) { const s = i / 40, u = 1 - s; pts.push([u * u * SEED[0] + 2 * u * s * ctrl[0] + s * s * e[0], u * u * SEED[1] + 2 * u * s * ctrl[1] + s * s * e[1]]); }
+      for (let i = 0; i <= 160; i++) { const s = i / 160, u = 1 - s; pts.push([u * u * SEED[0] + 2 * u * s * ctrl[0] + s * s * e[0], u * u * SEED[1] + 2 * u * s * ctrl[1] + s * s * e[1]]); }
       this.vines.push(pts);
-      for (let i = 6; i < 40; i += 5) this.leaves.push({ x: pts[i][0], y: pts[i][1], d: Math.hypot(pts[i][0] - SEED[0], pts[i][1] - SEED[1]), flip: i % 2 === 0 });
+      for (let i = 30; i < 150; i += 24) this.leaves.push({ x: pts[i][0], y: pts[i][1], d: Math.hypot(pts[i][0] - SEED[0], pts[i][1] - SEED[1]), flip: (i / 24) % 2 === 0 });
     }
   }
 
@@ -196,7 +212,10 @@ export class FinaleScene {
       for (let i = 0; i < this.letterLen / 18; i++) {
         const wx = r.range(0, this.letterLen), wy = r.range(150, 176);
         const sx = Math.round(wx) - cam; if (sx < -4 || sx > VW + 4) continue;
-        drawFloret(crisp, sx, Math.round(wy), r.pick([C.lilacLight, C.lilac, C.lilacPale]), false);
+        crisp.fillStyle = r.pick([C.lilacLight, C.lilac, C.lilacPale]);
+        const yy = Math.round(wy);
+        crisp.fillRect(sx - 1, yy, 3, 1); crisp.fillRect(sx, yy - 1, 1, 3);
+        crisp.fillStyle = C.flowerCenter; crisp.fillRect(sx, yy, 1, 1);
       }
       if (this.phase === 'letter') this.drawGirl(crisp, Math.round(this.px) - cam, Math.round(this.py));
       if (this.phase === 'toLetter') { crisp.globalAlpha = 1 - Math.min(1, this.t / 1.6); crisp.drawImage(this.paper, 0, 0); crisp.globalAlpha = 1; }
@@ -205,25 +224,39 @@ export class FinaleScene {
 
     crisp.drawImage(this.paper, 0, 0);
     if (this.phase === 'growing') {
-      // Ramas creciendo.
+      // Ramas de madera creciendo: gruesas cerca del brote, finas en la punta.
       const p = Math.min(1, this.t / 4.5);
-      crisp.fillStyle = '#5f7f4a';
       for (const v of this.vines) {
         const n = Math.floor(p * (v.length - 1));
-        for (let i = 0; i <= n; i++) { const [x, y] = v[i]; crisp.fillRect(Math.round(x), Math.round(y), i < 12 ? 2 : 1, i < 12 ? 2 : 1); }
+        for (let i = 0; i <= n; i++) {
+          const [x, y] = v[i];
+          const w = i < 30 ? 3 : i < 90 ? 2 : 1;
+          crisp.fillStyle = '#5b4232'; crisp.fillRect(Math.round(x), Math.round(y), w, w);
+          if (w > 1) { crisp.fillStyle = '#7d5c45'; crisp.fillRect(Math.round(x), Math.round(y), 1, w); }
+        }
       }
-      // Hojas.
+      // Hojas de lila (acorazonadas) a lo largo de las ramas.
       const r = this.waveR();
       for (const l of this.leaves) {
         if (l.d > r) continue;
-        const x = Math.round(l.x), y = Math.round(l.y);
-        crisp.fillStyle = '#7fbb79'; crisp.fillRect(x + (l.flip ? -3 : 1), y - 1, 3, 2); crisp.fillStyle = '#5f9b62'; crisp.fillRect(x + (l.flip ? -2 : 2), y, 1, 1);
+        const img = this.leafImgs[l.flip ? 1 : 0];
+        crisp.drawImage(img, Math.round(l.x) + (l.flip ? -img.width : 1), Math.round(l.y) - 3);
       }
-      // Flores: las del mensaje grandes y densas; las del fondo pálidas.
+      // Flores: brotan con un pequeño rebote; las del mensaje, de verdad.
       for (const b of this.blooms) {
         if (b.born < 0) continue;
         const age = this.t - b.born;
-        drawFloret(crisp, Math.round(b.x), Math.round(b.y), b.col, b.big, age);
+        const k = age < 0.4 ? 0.25 + 0.75 * (1 - Math.pow(1 - age / 0.4, 2)) * 1.08 : 1;
+        const w = b.img.width * k, h = b.img.height * k;
+        crisp.drawImage(b.img, Math.round(b.x - w / 2), Math.round(b.y - h / 2), Math.round(w), Math.round(h));
+      }
+      // Rocío que brilla sobre las flores ya abiertas.
+      for (const d of this.dew) {
+        const a = Math.sin(this.t * 1.6 + d.ph);
+        if (a <= 0.55 || Math.hypot(d.x - SEED[0], d.y - SEED[1]) * 0.9 > r - 8) continue;
+        crisp.fillStyle = `rgba(255,255,255,${((a - 0.55) * 2).toFixed(3)})`;
+        crisp.fillRect(d.x, d.y, 1, 1);
+        if (a > 0.9) { crisp.fillRect(d.x - 1, d.y, 1, 1); crisp.fillRect(d.x + 1, d.y, 1, 1); crisp.fillRect(d.x, d.y - 1, 1, 1); crisp.fillRect(d.x, d.y + 1, 1, 1); }
       }
     }
     // El brote y la tierra.
@@ -266,21 +299,20 @@ export class FinaleScene {
   }
 }
 
-// Flor de lila: grande (5×5 con centro) para las letras; chica (3×3) para el fondo.
-function drawFloret(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, big: boolean, age = 9): void {
-  const k = Math.min(1, age / 0.35);
-  ctx.fillStyle = col;
-  if (big) {
-    if (k < 0.34) { ctx.fillRect(x, y, 1, 1); return; }
-    if (k < 0.67) { ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y - 1, 1, 3); return; }
-    ctx.fillRect(x - 2, y, 5, 1); ctx.fillRect(x, y - 2, 1, 5); ctx.fillRect(x - 1, y - 1, 3, 3);
-    ctx.fillStyle = C.lilacPale; ctx.fillRect(x - 1, y - 1, 1, 1);
-    ctx.fillStyle = C.flowerCenter; ctx.fillRect(x, y, 1, 1);
-  } else {
-    if (k < 0.5) { ctx.fillRect(x, y, 1, 1); return; }
-    ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y - 1, 1, 3);
-    ctx.fillStyle = C.flowerCenter; ctx.fillRect(x, y, 1, 1);
-  }
+// Una flor de lila de verdad (pétalos con sombra, garganta, rocío), lista para dibujar.
+function renderFlowerCanvas(rng: Rng, S: number, rot: number, k = 0): HTMLCanvasElement {
+  const size = Math.ceil(S * 2.3) + 4;
+  const pb = new PixelBuffer(size, size);
+  bigFloret(pb, rng, size >> 1, size >> 1, S, rot, k);
+  return pb.toCanvas();
+}
+
+// Hoja de lila: acorazonada, con vena.
+function renderLeaf(flip: boolean): HTMLCanvasElement {
+  const rows = flip
+    ? ['..GG.', '.GGGg', 'GGGgg', '.GGGg', '..GG.']
+    : ['.GG..', 'gGGG.', 'ggGGG', 'gGGG.', '.GG..'];
+  return sprite(rows, { G: C.leaf, g: C.leafDark }).toCanvas();
 }
 
 // Papel: beige con fibras, motas y bordes apenas más oscuros.

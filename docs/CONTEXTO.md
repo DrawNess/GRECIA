@@ -73,7 +73,8 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      con el evento `finale`): fundido a pergamino; "plantar" (J planta la
      flor); del brote crecen ramas, hojas y flores que forman "TE AMO MUCHO
      MUCHO GRECIA" (letras 5×7 de lilas; `GLYPHS`, `MESSAGE`, `LINE_TOPS`)
-     y pueblan la hoja; luego la carta: Grecia camina y los párrafos de
+     — cada punto es una flor de verdad (`bigFloret`, solapadas) sobre ramas
+     de madera con hojas — y pueblan la hoja; luego la carta: Grecia camina y los párrafos de
      `story.letter` (DOM, `.letter__p`) aparecen a su paso. La puerta de
      jardín se eliminó: el final es la hoja.
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
@@ -111,7 +112,8 @@ src/engine/hash.ts         sha256 en JS puro (funciona también en http://)
 src/engine/save.ts         localStorage (progreso, silencio)
 src/engine/audio.ts        sonido por código (WebAudio): ambientes y efectos
 src/art/palette.ts         TODOS los colores, con nombre
-src/art/sprites.ts         Grecia (3 vistas, caminata, sentada), Jhammil sentado, ramita
+src/art/sprites.ts         Grecia (3 vistas, caminata, sentada), Jhammil (sentado, de pie, saludo), ramita
+src/art/lilac.ts           flores de lila compartidas: floret/panicle (racimos), bigFloret/petal (flores grandes con sombra y rocío), fogged/mix
 src/scenes/title.ts        LA escena: menú + mundo + objetos + animaciones
 src/scenes/finale.ts       el final: pergamino, plantar, mensaje de lilas, la carta
 src/ui/gate.ts             panel de nombre/fecha (DOM), ayudas (una a la vez)
