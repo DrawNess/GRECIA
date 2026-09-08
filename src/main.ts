@@ -39,7 +39,11 @@ tagEl.className = 'tag';
 tagEl.hidden = true;
 stage.ui.appendChild(tagEl);
 
-const step = (dt: number) => { scene.update(dt, input); input.endFrame(); };
+const step = (dt: number) => {
+  scene.update(dt, input);
+  input.endFrame();
+  for (const e of scene.takeEvents()) if (e === 'storm') showCaption(stage.ui, gate.stormHint, 6000);
+};
 const draw = () => {
   scene.render(stage.crisp, stage.soft, stage.haze);
   const tag = scene.nameTag();

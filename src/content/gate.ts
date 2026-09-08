@@ -20,4 +20,5 @@ export const gate = {
 
   enterHint: 'Enter ↵ para continuar',
   moveHint: 'Flechas para caminar · J para mirar de cerca',
+  stormHint: 'Esquiva lo que cae · J para romper lo que estorba',
 };

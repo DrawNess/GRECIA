@@ -10,7 +10,7 @@ import { GRECIA, GRECIA_SEATED, JHAMMIL_SEATED, SPRIG, type DirSprites } from '.
 import { story } from '../content/story';
 import { ACTION, type Input } from '../engine/input';
 
-export const WORLD_W = 1440;
+export const WORLD_W = 2080;
 const HORIZON = 150;
 // De día junto al árbol; al caminar a la derecha cae la noche.
 const NIGHT_FROM = 340, NIGHT_TO = 660;
@@ -18,9 +18,17 @@ const nightAt = (x: number) => { const t = Math.min(1, Math.max(0, (x - NIGHT_FR
 // La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
 // x0..x1 pavimento · wallX0..wallX1 la pared · house su casa · streetX0..x1 la calle que entra
 const STREET = { x0: 600, wallX0: 612, wallX1: 986, house: 996, streetX0: 1040, x1: 1096, wallTop: 92, pole: 1064 };
-const BENCH = { x: 1190, baseY: 165 };
+// La tormenta: los problemas. Entre la esquina verde y el parque.
+const STORM = { x0: 1100, x1: 1740 };
+const stormAt = (x: number) => {
+  const inA = Math.min(1, Math.max(0, (x - STORM.x0) / 80));
+  const outA = Math.min(1, Math.max(0, (STORM.x1 - x) / 100));
+  return Math.min(inA, outA);
+};
+const BARRIERS = [1250, 1400, 1550];
+const BENCH = { x: 1830, baseY: 165 };
 // Chimuelo duerme después de la banca, sobre el pasto.
-const DRAGON = { x: 1300, baseY: 164, w: 44, h: 30 };
+const DRAGON = { x: 1940, baseY: 164, w: 44, h: 30 };
 const PAR_FAR = 0.2, PAR_MID = 0.45;
 const FAR_W = Math.ceil(VW + PAR_FAR * (WORLD_W - VW));
 const MID_W = Math.ceil(VW + PAR_MID * (WORLD_W - VW));
@@ -41,14 +49,18 @@ interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: s
 interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
 // Objeto en el suelo (coordenadas de mundo). `baseY` decide el orden de dibujo.
 type Secret = 'none' | 'butterflies' | 'birds';
-type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate';
-interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number } }
+type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier';
+interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number }; hp?: number; variants?: HTMLCanvasElement[] }
+// Lluvia (pantalla), gota pesada que cae (mundo) y relámpago.
+interface Rain { x: number; y: number; v: number }
+interface Drop { x: number; groundY: number; h: number; v: number }
+interface Bolt { pts: Pt[]; t: number }
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type DragonState = 'sleep' | 'wake' | 'fly' | 'gone';
 interface Dragon { state: DragonState; t: number; x: number; y: number; vx: number; vy: number; hearts: boolean; lastZ: number }
 type Facing = 'up' | 'down' | 'left' | 'right';
-interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number; sitting: boolean }
+interface Player { x: number; y: number; facing: Facing; moving: boolean; walkT: number; sitting: boolean; stun: number; knock: number }
 // Luz nocturna (mundo): farol o ventana; brilla según lo oscuro que esté ahí.
 interface Light { x: number; y: number; r: number; col: string; a: number }
 interface Star { x: number; y: number; ph: number }
@@ -84,7 +96,18 @@ export class TitleScene {
   readonly icon: HTMLCanvasElement;
 
   private readonly props: Prop[] = [];
-  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false };
+  private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false, stun: 0, knock: 0 };
+  // Tormenta.
+  private readonly clouds: HTMLCanvasElement;
+  private readonly rain: Rain[] = [];
+  private readonly drops: Drop[] = [];
+  private bolt: Bolt | null = null;
+  private flash = 0;
+  private nextBolt = 4;
+  private nextDrop = 1.5;
+  private broken = 0;
+  private stormSeen = false;
+  private readonly events: string[] = [];
   private camX = 0;
   private mode: 'menu' | 'game' = 'menu';
   private focus = 1;      // 1 = menú (enfoque + niebla) · 0 = juego (todo nítido)
@@ -132,13 +155,17 @@ export class TitleScene {
     const mid = new PixelBuffer(MID_W, VH);
     paintDistantTrees(mid, rng, MID_W);
     this.mid = mid.toCanvas();
+    const clouds = new PixelBuffer(MID_W, 80);
+    paintStormClouds(clouds, rng);
+    this.clouds = clouds.toCanvas();
 
     const world = new PixelBuffer(WORLD_W, VH);
     paintGround(world, rng);
     paintStreet(world, rng);
+    paintPuddles(world, rng);
     paintCanopyAt(world, rng, dew, 160, 40, 200, 82, 1);
     paintCanopyAt(world, rng, dew, 500, 70, 66, 44, 0.62);
-    paintCanopyAt(world, rng, dew, 1128, 64, 72, 48, 0.66);
+    paintCanopyAt(world, rng, dew, 1768, 64, 72, 48, 0.66);
     // Luz de los faroles sobre el suelo, ya horneada (la noche no cambia).
     for (const lx of LAMPS) {
       const n = nightAt(lx);
@@ -149,7 +176,7 @@ export class TitleScene {
     // ── Objetos ──
     this.addTrunk(rng, MAIN_TREE.x, MAIN_TREE.base, MAIN_TREE.top, 8, [[[-2, 104], [112, 66]], [[-1, 100], [156, 44]], [[2, 104], [231, 62]], [[3, 110], [248, 104]]], 10);
     this.addTrunk(rng, 500, 153, 112, 4.5, [[[-1, 118], [470, 94]], [[1, 114], [506, 86]], [[2, 118], [532, 98]]], 6);
-    this.addTrunk(rng, 1128, 153, 108, 5, [[[-1, 114], [1092, 88]], [[0, 110], [1134, 78]], [[2, 114], [1166, 92]]], 7);
+    this.addTrunk(rng, 1768, 153, 108, 5, [[[-1, 114], [1732, 88]], [[0, 110], [1774, 78]], [[2, 114], [1806, 92]]], 7);
     // Faroles al borde del pasto, sin estorbar la vereda. De noche, encendidos.
     for (const x of LAMPS) {
       this.addProp('lamp', renderLamp(nightAt(x)), x, 164, 3, { hw: 2, depth: 3 });
@@ -161,7 +188,13 @@ export class TitleScene {
     this.lights.push({ x: STREET.house + 27, y: HORIZON - 15, r: 6, col: '255,220,150', a: 0.3 });
     // La banca grande, con Jhammil sentado mirando hacia donde llegará ella.
     this.addProp('bench', renderBench(JHAMMIL_SEATED), BENCH.x, BENCH.baseY, 26, { hw: 23, depth: 3 });
-    this.addProp('gate', renderGate(rng), 1412, 160, 16, { hw: 15, depth: 4 });
+    this.addProp('gate', renderGate(rng), 2052, 160, 16, { hw: 15, depth: 4 });
+    // Las marañas de la tormenta: cierran el camino hasta romperlas con J.
+    for (const bx of BARRIERS) {
+      const variants = [3, 2, 1].map((hp) => renderBarrier(new Rng(bx), hp));
+      const pr = this.addProp('barrier', variants[0], bx, 181, 12, { hw: 8, depth: 34 });
+      pr.hp = 3; pr.variants = variants;
+    }
     this.seated = GRECIA_SEATED.toCanvas();
     this.dragonImgs = {
       sleep: [renderDragon('sleep', 0), renderDragon('sleep', 1)],
@@ -238,6 +271,9 @@ export class TitleScene {
     void rng;
   }
 
+  /** Avisos para la interfaz (ayudas), se consumen al leerlos. */
+  takeEvents(): string[] { return this.events.splice(0); }
+
   /** Etiqueta con el nombre de Jhammil (coordenadas de pantalla) cuando ella está cerca de la banca. */
   nameTag(): { text: string; x: number; y: number } | null {
     if (this.mode !== 'game') return null;
@@ -311,6 +347,13 @@ export class TitleScene {
 
   private movePlayer(dt: number, input: Input): void {
     const p = this.player;
+    if (p.stun > 0) {
+      // Tropieza: retrocede un poco y no responde un instante.
+      p.stun -= dt; p.moving = false; p.walkT = 0;
+      p.x = Math.max(-2, p.x + p.knock * dt);
+      p.knock *= Math.exp(-8 * dt);
+      return;
+    }
     const [ax, ay] = input.axis;
     if (p.sitting) {
       // Cualquier flecha la levanta de la banca.
@@ -333,11 +376,11 @@ export class TitleScene {
     const fx = this.player.x + GIRL_W / 2, fy = this.player.y + GIRL_H - 1;
     let best: Prop | null = null, bestD = Infinity;
     for (const pr of this.props) {
-      if (pr.kind !== 'bush' && pr.kind !== 'bench') continue;
+      if (pr.kind !== 'bush' && pr.kind !== 'bench' && pr.kind !== 'barrier') continue;
       const dx = Math.abs(fx - pr.cx), dy = Math.abs(fy - pr.baseY);
-      if (dx > pr.r + 9 || dy > 14) continue;
-      // La banca tiene prioridad sobre los arbustos de alrededor.
-      const d = dx + dy * 2 - (pr.kind === 'bench' ? 100 : 0);
+      if (pr.kind === 'barrier' ? dx > 22 : dx > pr.r + 9 || dy > 14) continue;
+      // La banca y las marañas tienen prioridad sobre los arbustos de alrededor.
+      const d = dx + dy * 2 - (pr.kind === 'bush' ? 0 : 100);
       if (d < bestD) { bestD = d; best = pr; }
     }
     return best;
@@ -353,6 +396,7 @@ export class TitleScene {
   // J sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
   private poke(pr: Prop): void {
     if (pr.kind === 'bench') { this.sit(); return; }
+    if (pr.kind === 'barrier') { this.hitBarrier(pr); return; }
     pr.shake = 0.5;
     const r = this.rng;
     const top = pr.baseY - pr.r * 2;
@@ -409,6 +453,69 @@ export class TitleScene {
     }
   }
 
+  // Golpe a una maraña: se agrieta, y al tercer golpe se deshace. Con cada
+  // problema roto la tormenta amaina un poco.
+  private hitBarrier(pr: Prop): void {
+    const r = this.rng;
+    pr.shake = 0.4;
+    pr.hp = (pr.hp ?? 1) - 1;
+    const n = pr.hp > 0 ? 6 : 22;
+    for (let i = 0; i < n; i++) {
+      this.critters.push({ kind: 'puff', x: pr.cx + r.range(-7, 7), y: pr.baseY - r.range(4, 34), vx: r.range(-45, 45), vy: r.range(-70, -10), ph: 0, t: 0, life: pr.hp > 0 ? 0.7 : 1.1, col: r.pick(['#3d3653', '#5a5070', '#1e1b2a']) });
+    }
+    if (pr.hp > 0) { pr.img = pr.variants![3 - pr.hp]; return; }
+    this.props.splice(this.props.indexOf(pr), 1);
+    this.broken++;
+    this.flash = Math.max(this.flash, 0.6);
+    if (this.nearProp === pr) this.nearProp = null;
+  }
+
+  // Lluvia, gotas pesadas que hay que esquivar y relámpagos. Todo amaina
+  // según los problemas rotos.
+  private updateStorm(dt: number): void {
+    const p = this.player;
+    const intensity = stormAt(this.camX + VW / 2) * (1 - 0.85 * (this.broken / BARRIERS.length));
+    const r = this.rng;
+    if (!this.stormSeen && p.x > STORM.x0 - 30) { this.stormSeen = true; this.events.push('storm'); }
+    // Lluvia en pantalla: la cantidad sigue a la intensidad.
+    const want = Math.round(90 * intensity);
+    while (this.rain.length < want) this.rain.push({ x: r.range(-20, VW + 40), y: r.range(-VH, VH), v: r.range(150, 230) });
+    if (this.rain.length > want) this.rain.length = want;
+    for (const d of this.rain) {
+      d.y += d.v * dt; d.x -= 38 * dt;
+      if (d.y > 165 + (d.x * 7) % 14) { d.y = r.range(-40, -4); d.x = r.range(-10, VW + 50); }
+    }
+    // Gotas pesadas: caen cerca de Grecia, con sombra que avisa dónde.
+    this.nextDrop -= dt;
+    if (intensity > 0.15 && this.nextDrop <= 0 && !p.sitting) {
+      const x = Math.min(STORM.x1 - 30, Math.max(STORM.x0 + 30, p.x + r.range(-60, 100)));
+      this.drops.push({ x, groundY: r.range(HORIZON + 3, VH - 3), h: 170, v: r.range(95, 130) });
+      this.nextDrop = r.range(0.55, 1.3) / Math.max(0.35, intensity);
+    }
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.h -= d.v * dt;
+      if (d.h > 0) continue;
+      this.drops.splice(i, 1);
+      for (let k = 0; k < 6; k++) this.critters.push({ kind: 'puff', x: d.x + r.range(-3, 3), y: d.groundY - 1, vx: r.range(-30, 30), vy: r.range(-40, -12), ph: 0, t: 0, life: 0.5, col: r.pick(['#8f9ac4', '#b5bde0']) });
+      const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
+      if (p.stun <= 0 && Math.abs(fx - d.x) < 7 && Math.abs(fy - d.groundY) < 6) { p.stun = 0.7; p.knock = -70; p.moving = false; }
+    }
+    // Relámpagos mientras la tormenta esté fuerte.
+    this.nextBolt -= dt;
+    if (intensity > 0.3 && this.nextBolt <= 0) {
+      const x0 = r.range(30, VW - 30);
+      const pts: Pt[] = [[x0, -2]];
+      let x = x0, y = 0;
+      while (y < r.range(70, 110)) { x += r.range(-12, 12); y += r.range(10, 18); pts.push([x, y]); }
+      this.bolt = { pts, t: 0 };
+      this.flash = 1;
+      this.nextBolt = r.range(3.5, 8) / Math.max(0.4, intensity);
+    }
+    if (this.bolt) { this.bolt.t += dt; if (this.bolt.t > 0.16) this.bolt = null; }
+    this.flash = Math.max(0, this.flash - dt * 3);
+  }
+
   private updateCritters(dt: number): void {
     for (let i = this.critters.length - 1; i >= 0; i--) {
       const c = this.critters[i];
@@ -448,6 +555,7 @@ export class TitleScene {
       }
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
       this.updateDragon(dt);
+      this.updateStorm(dt);
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
         const f = this.flyers[i];
@@ -505,7 +613,15 @@ export class TitleScene {
     ctx.drawImage(this.far, farX, 0);
     if (n > 0) { ctx.globalAlpha = n; ctx.drawImage(this.farNight, farX, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.mid, -Math.round(this.camX * PAR_MID), 0);
+    const cloudA = 1 - 0.85 * (this.broken / BARRIERS.length);
+    if (cloudA > 0.02) { ctx.globalAlpha = cloudA; ctx.drawImage(this.clouds, -Math.round(this.camX * PAR_MID), 0); ctx.globalAlpha = 1; }
     ctx.drawImage(this.world, -cam, 0);
+    // Sombras de las gotas que están por caer.
+    for (const d of this.drops) {
+      const rx = 2 + 4 * (1 - d.h / 170);
+      ctx.fillStyle = 'rgba(20,18,40,0.35)';
+      ctx.beginPath(); ctx.ellipse(d.x - cam, d.groundY, rx, Math.max(1, rx * 0.45), 0, 0, 6.2832); ctx.fill();
+    }
 
     type Drawable = { baseY: number; draw: () => void };
     const items: Drawable[] = [];
@@ -529,8 +645,9 @@ export class TitleScene {
         items.push({ baseY: BENCH.baseY + 0.5, draw: () => ctx.drawImage(this.seated, Math.round(p.x) - cam, Math.round(p.y)) });
       } else {
         const { img, bob } = this.girlFrame();
-        const gx = Math.round(p.x) - cam, gy = Math.round(p.y) + bob;
-        items.push({ baseY: p.y + GIRL_H - 1, draw: () => { ctx.drawImage(this.girlShadow, gx, gy - bob + GIRL_H - 2); ctx.drawImage(img, gx, gy); } });
+        const wob = p.stun > 0 ? Math.round(Math.sin(p.stun * 40) * 1.5) : 0;
+        const gx = Math.round(p.x) - cam + wob, gy = Math.round(p.y) + bob;
+        items.push({ baseY: p.y + GIRL_H - 1, draw: () => { ctx.drawImage(this.girlShadow, gx - wob, gy - bob + GIRL_H - 2); ctx.drawImage(img, gx, gy); } });
       }
     }
     items.sort((a, b) => a.baseY - b.baseY);
@@ -614,6 +731,26 @@ export class TitleScene {
       crisp.fillRect(this.cameraLed[0] - cam, this.cameraLed[1], 1, 1);
     }
 
+    // Tormenta: gotas pesadas cayendo, lluvia, relámpago y destello.
+    for (const d of this.drops) {
+      const x = Math.round(d.x) - cam, y = Math.round(d.groundY - d.h);
+      crisp.fillStyle = '#3a3f6e'; crisp.fillRect(x - 1, y - 4, 3, 4); crisp.fillRect(x, y - 6, 1, 2);
+      crisp.fillStyle = '#7f88c4'; crisp.fillRect(x - 1, y - 3, 1, 2);
+    }
+    if (this.rain.length) {
+      crisp.fillStyle = 'rgba(205,214,242,0.55)';
+      for (const d of this.rain) { const x = Math.round(d.x), y = Math.round(d.y); crisp.fillRect(x, y, 1, 3); crisp.fillRect(x - 1, y + 3, 1, 3); }
+    }
+    if (this.bolt) {
+      crisp.fillStyle = '#f8f4ff';
+      const pts = this.bolt.pts;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+        for (let t = 0; t <= 1; t += 0.07) crisp.fillRect(Math.round(ax + (bx - ax) * t), Math.round(ay + (by - ay) * t), i < 3 ? 2 : 1, 1);
+      }
+    }
+    if (this.flash > 0) { crisp.fillStyle = `rgba(240,236,255,${(0.45 * this.flash).toFixed(3)})`; crisp.fillRect(0, 0, VW, VH); }
+
     // Pétalos ambientales (pantalla), racimo del frente y flores al viento.
     for (const p of this.petals) {
       const x = Math.round(p.x), y = Math.round(p.y);
@@ -665,6 +802,8 @@ export class TitleScene {
       haze.fillStyle = g;
       haze.fillRect(0, 0, SW, SH);
     }
+    const stormK = stormAt(this.camX + VW / 2) * (1 - 0.7 * (this.broken / BARRIERS.length));
+    if (stormK > 0) { haze.fillStyle = `rgba(38,42,70,${(0.32 * stormK).toFixed(3)})`; haze.fillRect(0, 0, SW, SH); }
     // Faroles y ventana encendidos.
     for (const l of this.lights) {
       if (l.a <= 0.02) continue;
@@ -832,7 +971,7 @@ function paintGround(pb: PixelBuffer, rng: Rng): void {
     const col = fogged(rng.pick([C.leaf, C.leafLight, C.groundLight]), 0.3);
     pb.set(x, y, col); pb.set(x + 2, y, col); pb.set(x + 1, y + 1, col);
   }
-  for (const [tx, n] of [[160, 60], [500, 24], [1128, 26]] as Pt[]) {
+  for (const [tx, n] of [[160, 60], [500, 24], [1768, 26]] as Pt[]) {
     for (let i = 0; i < n; i++) pb.set(tx + Math.round(rng.range(-90, 90)), HORIZON + rng.int(VH - HORIZON), hex(rng.pick(PETAL_COLS)));
   }
 }
@@ -911,7 +1050,7 @@ function paintStreet(pb: PixelBuffer, rng: Rng): void {
   pb.rect(pole + 4, base - 31, 4, 1, hex('#3b3236')); pb.rect(pole + 4, base - 30, 4, 2, hex(C.lampLight)); pb.set(pole + 5, base - 30, hex('#ffffff'));
 }
 
-const LAMPS = [420, 655, 955, 1270];
+const LAMPS = [420, 655, 955, 1910];
 
 // ───────────────────────── árboles ─────────────────────────
 
@@ -1029,10 +1168,11 @@ function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
     [16, 176, 11], [52, 163, 9], [86, 173, 10], [30, 156, 7], [122, 156, 7],
     [196, 175, 11], [232, 161, 9], [268, 177, 12], [300, 159, 8], [250, 153, 7], [178, 178, 8],
   ];
-  for (let x = 350; x < 1385; x += 46 + rng.int(34)) {
+  for (let x = 350; x < WORLD_W - 60; x += 46 + rng.int(34)) {
     const r = 7 + rng.int(6);
     const baseY = 153 + rng.int(26);
     if (x > STREET.x0 - 20 && x < STREET.x1 + 16) continue; // la esquina verde es pavimento
+    if (x > STORM.x0 - 20 && x < STORM.x1 + 20) continue; // en la tormenta solo hay problemas
     if (Math.abs(x - BENCH.x) < 52) continue; // espacio libre alrededor de la banca
     if (Math.abs(x - DRAGON.x - DRAGON.w / 2) < 44) continue; // y alrededor de Chimuelo
     if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
@@ -1203,6 +1343,56 @@ function renderDragon(pose: 'sleep' | 'wake' | 'fly', frame: number): HTMLCanvas
     pb.poly([[17, up ? 13 : 20], [12, up ? 6 : 26], [20, up ? 5 : 27]], w);
     // Patas recogidas.
     pb.ellipse(16, 21, 3, 1, O); pb.ellipse(27, 21, 3, 1, O); pb.ellipse(16, 21, 2, 1, K); pb.ellipse(27, 21, 2, 1, K);
+  }
+  return pb.toCanvas();
+}
+
+// Nubes de tormenta en la capa media, colocadas para quedar sobre el tramo
+// de la tormenta cuando la cámara pasa por ahí (parallax 0.45).
+function paintStormClouds(pb: PixelBuffer, rng: Rng): void {
+  const x0 = VW / 2 + PAR_MID * (STORM.x0 - VW / 2) - 60, x1 = VW / 2 + PAR_MID * (STORM.x1 - VW / 2) + 60;
+  for (let i = 0; i < 90; i++) {
+    const x = rng.range(x0, x1), y = rng.range(-10, 46);
+    const edge = Math.min(1, Math.min(x - x0, x1 - x) / 90);
+    if (rng.next() > edge + 0.1) continue;
+    const r = 10 + rng.int(18);
+    pb.circle(x, y, r, hex(rng.pick(['#2c2840', '#332e4a', '#3a3550']), 235));
+    pb.circle(x - 3, y - 4, Math.max(2, r - 6), hex('#4a4463', 150));
+  }
+  for (let i = 0; i < 300; i++) pb.set(Math.round(rng.range(x0, x1)), rng.int(56), hex(rng.pick(['#3a3550', '#26223a']), 120));
+}
+
+// Charcos en el tramo de la tormenta.
+function paintPuddles(pb: PixelBuffer, rng: Rng): void {
+  for (let i = 0; i < 16; i++) {
+    const x = rng.range(STORM.x0 + 20, STORM.x1 - 20), y = rng.range(HORIZON + 4, VH - 3);
+    const rx = 5 + rng.int(9);
+    pb.ellipse(x, y, rx, 1 + rng.int(2), [150, 160, 205, 95]);
+    pb.hline(x - rx + 2, x + rx - 4, y - 1, [200, 210, 240, 70]);
+  }
+}
+
+// Maraña oscura (un problema): tallos enredados con espinas. Con menos vida,
+// menos tallos y grietas claras.
+function renderBarrier(rng: Rng, hp: number): HTMLCanvasElement {
+  const pb = new PixelBuffer(22, 46);
+  pb.ellipse(11, 44, 10, 2, hex('#1a1826', 110));
+  const dark = hex('#1e1b2a'), mid = hex('#2f2a42'), light = hex('#4a4262');
+  const stems = 3 + hp;
+  for (let s = 0; s < stems; s++) {
+    let x = rng.range(4, 18), y = 43;
+    const drift = rng.range(-0.8, 0.8);
+    while (y > 6 + rng.int(8)) {
+      const r = y > 30 ? 2 : 1;
+      pb.circle(x, y, r + 1, dark); pb.circle(x - 1, y, r, y % 3 === 0 ? light : mid);
+      if (rng.next() < 0.25) { const tx = x + (rng.next() < 0.5 ? -3 : 3); pb.set(tx, y, hex('#7a6f8a')); pb.set(tx + (tx > x ? -1 : 1), y, mid); }
+      x += drift + rng.range(-1.5, 1.5); y -= 2;
+      if (x < 2) x = 2; if (x > 19) x = 19;
+    }
+  }
+  for (let i = 0; i < (3 - hp) * 6; i++) {
+    const x = rng.range(3, 19), y = rng.range(8, 40);
+    pb.set(Math.round(x), Math.round(y), hex('#9a90b8')); pb.set(Math.round(x) + 1, Math.round(y) + 1, hex('#c9bfe0'));
   }
   return pb.toCanvas();
 }

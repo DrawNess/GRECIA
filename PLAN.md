@@ -35,7 +35,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 
 ## Mundo (etapa 1) — el paseo como recuerdo
 
-- 1440 px (4½ pantallas). Vereda continua abajo; senda curva al árbol grande.
+- 2080 px (6½ pantallas). Vereda continua abajo; senda curva al árbol grande.
 - **Día → noche** al caminar a la derecha (x 340–660): el cielo pasa por el
   atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
   faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
@@ -47,6 +47,12 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   casa** (puerta con luz en el portal, ventana encendida, cámara de seguridad
   con luz roja que parpadea); a la derecha, la calle que entra con un poste
   de luz al centro.
+- Tramo 3½ (noche, x 1100–1740): **la tormenta** — los problemas. Nubes
+  oscuras (capa media, parallax), lluvia de lado, relámpagos con destello,
+  charcos. Minijuego: caen gotas pesadas (sombra en el suelo avisa dónde);
+  si alcanzan a Grecia tropieza y retrocede. Tres marañas oscuras cierran la
+  vereda: se rompen con J (3 golpes). Cada problema roto amaina la lluvia y
+  abre las nubes; con el último, la tormenta pasa.
 - Tramo 4 (noche): tercer árbol, farol y **la banca grande con Jhammil**
   sentado (cabello corto, camisa blanca, un poco más alto que ella); su nombre
   aparece en una etiqueta al acercarse. Con J junto a la banca, Grecia se sienta a su
