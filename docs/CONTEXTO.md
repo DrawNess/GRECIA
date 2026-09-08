@@ -54,12 +54,13 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      ella mira, con las manos unidas dibujadas entre los dos). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
      despierta, suelta corazones y se va volando; vuelve a dormirse si ella
      se aleja un rato.
-   - Tramo 5 (noche, x ≥ 1990): **la autopista** horizontal de cuatro
-     carriles; la vereda termina en una baranda y hay que cruzar hacia la
-     acera de enfrente (la franja de suelo sube hasta y=116 en ese tramo:
-     `minFeetAt`). Autos de perfil por carril; si uno pisa a cualquiera de
-     los dos → fundido y vuelta a la banca (`respawnAtBench`), no al menú.
-     La puerta final está en la acera de enfrente.
+   - Tramo 5 (noche, centro x 2080): **la autopista** en perspectiva (ancha
+     abajo, curva suave hacia el fondo), cuatro carriles, farolas a ambos
+     lados. Los autos vienen creciendo por la derecha y se alejan por la
+     izquierda; se cruza de lado a lado por el paso de cebra. Si uno pisa a
+     cualquiera de los dos → fundido y vuelta a la banca (`respawnAtBench`),
+     no al menú. (Jhammil prefirió esta versión a una horizontal tipo
+     Frogger, que probamos y descartamos.)
    - Puerta de jardín cerrada al final (meta provisional).
 4. **Interacción**: J junto a un arbusto lo sacude; de algunos salen
    mariposas o pájaros (una vez cada uno). J junto a la banca: sentarse.
@@ -148,13 +149,13 @@ scripts/hash.mjs           `pnpm hash`
   sigue su velocidad; `holding` cuando está en su sitio → se dibujan las
   manos unidas (píxeles de piel entre ambos) al dibujar a Grecia. Sprites
   `JHAMMIL` (perfil/espaldas/frente, 12×26, caminata de 4 cuadros).
-- **Autopista** (`updateHighway`): `ROAD` (x0, top, bottom, farWalk, fence,
-  crossing) y `LANES` (y de pies, sentido, escala). `cars` corren por su
-  carril a 62–108 px/s y se dibujan escalados y ordenados por el carril;
-  faros/luces rojas en `haze`. Atropello = pies a ±5 px del carril y dentro
-  del largo del auto (Grecia o Jhammil) → `hit:car` → main funde y llama
-  `respawnAtBench()`. `minFeetAt(x)` sube la franja de suelo a 116 desde
-  `ROAD.x0`; `blocked()` la respeta.
+- **Autopista** (`updateHighway`): `ROAD` (cx, vanishY, nearY, halfFar,
+  halfNear, bend) y `roadX/roadY/roadHalf/roadCX/roadS(t)` dan la geometría
+  por profundidad t (0 punto de fuga … 1 abajo). `ROAD_LANES` = cuatro
+  carriles (`off` −1…1, `coming`). `cars` avanzan en t (más lento lejos) y
+  se dibujan escalados y ordenados por su base; faros/luces rojas en `haze`.
+  Atropello = base del auto a ±6 px de los pies (Grecia o Jhammil) y dentro
+  de su ancho → `hit:car` → main funde y llama `respawnAtBench()`.
 - **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
   hay tormenta; estrella fugaz cada 12–26 s.
 - **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;

@@ -75,16 +75,17 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 - Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
   soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va
   volando; si ella se aleja un rato, vuelve a dormirse.
-- Tramo 5 (noche, después de Chimuelo, x ≥ 1990): **la autopista**,
-  horizontal, de cuatro carriles (líneas discontinuas, la del medio
-  amarilla), acera de enfrente con baranda y farolas, bordillos y paso de
-  cebra. La vereda de este lado termina en una baranda: hay que cruzar de
-  abajo hacia arriba, carril por carril (tipo Frogger). Autos de perfil:
-  los dos carriles lejanos van a la izquierda, los cercanos a la derecha,
-  con faros y luces rojas; uno cada 1,8–4,2 s por carril. Si un auto pisa a
-  Grecia o a Jhammil: bocina, fundido corto y **vuelven a la banca**, de pie
-  y de la mano ("Otra vez, con calma."). La puerta final está en la acera
-  de enfrente.
+- Tramo 5 (noche, después de Chimuelo, centro x 2080): **la autopista** en
+  perspectiva, ancha abajo (se abre hacia nosotros y sigue bajo la vereda) y
+  con curva suave hacia el punto de fuga, donde brilla la ciudad. Cuatro
+  carriles (bordes blancos, divisores discontinuos, doble amarilla al
+  centro), arcenes de grava, guardarraíl, farolas a ambos lados que se
+  achican con la distancia, paso de cebra a la altura de la vereda. Por los
+  dos carriles de la derecha **vienen autos** creciendo (faros); por los de
+  la izquierda se alejan (luces rojas); uno cada 2,4–5 s por carril. Se
+  cruza de lado a lado cuando no venga ninguno a esa altura. Si un auto pisa
+  a Grecia o a Jhammil: bocina, fundido corto y **vuelven a la banca**, de
+  pie y de la mano ("Otra vez, con calma.").
 - De noche en el parque (fuera de la tormenta): luciérnagas y, de vez en
   cuando, una estrella fugaz.
 - **Sonido** generado por código (`engine/audio.ts`): viento, lluvia y truenos

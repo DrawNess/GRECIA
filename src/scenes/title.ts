@@ -32,15 +32,18 @@ const BARRIERS = [1250, 1400, 1550];
 const KIOSK = { x: 1330, baseY: 151 };
 const FLOWER_SPOT = { x: 1612, baseY: 174 };
 const RUN_MULT = 1.7;
-// La autopista: después de Chimuelo, cuatro carriles que cruzan la pantalla de
-// lado a lado. Se cruza de abajo (la vereda) a arriba (la acera de enfrente).
-const ROAD = { x0: 1990, top: 122, bottom: 166, farWalk: 116, fence: 2150, crossing: 2064 };
-// Carriles: y de los pies, sentido y tamaño (los lejanos, un poco más chicos).
-const LANES: { y: number; dir: number; s: number }[] = [
-  { y: 127, dir: -1, s: 0.82 }, { y: 138, dir: -1, s: 0.9 }, { y: 149, dir: 1, s: 0.96 }, { y: 160, dir: 1, s: 1 },
-];
-// Hasta dónde puede subir Grecia (y de los pies) según dónde esté.
-const minFeetAt = (x: number) => (x >= ROAD.x0 - 4 ? ROAD.farWalk : HORIZON);
+// La autopista: después de Chimuelo, cruza el camino y se pierde hacia el
+// fondo con una curva suave. t = 0 en el punto de fuga … 1 abajo del todo.
+const ROAD = { cx: 2080, vanishY: 98, nearY: 188, halfFar: 5, halfNear: 88, bend: 26 };
+const roadY = (t: number) => ROAD.vanishY + (ROAD.nearY - ROAD.vanishY) * t;
+const roadHalf = (t: number) => ROAD.halfFar + (ROAD.halfNear - ROAD.halfFar) * t;
+const roadCX = (t: number) => ROAD.cx + ROAD.bend * (1 - t) * (1 - t);
+// `off` = posición dentro de la calzada, -1 (borde izq.) … 1 (borde der.).
+const roadX = (t: number, off: number) => roadCX(t) + off * roadHalf(t);
+const roadS = (t: number) => 0.16 + 1.14 * t * t;
+// Carriles: los dos de la izquierda se alejan, los dos de la derecha vienen.
+const ROAD_LANES: { off: number; coming: boolean }[] = [{ off: -0.72, coming: false }, { off: -0.26, coming: false }, { off: 0.26, coming: true }, { off: 0.72, coming: true }];
+const ROAD_LAMPS = [0.2, 0.36, 0.55, 0.78];
 const BENCH = { x: 1830, baseY: 165 };
 // Chimuelo duerme después de la banca, sobre el pasto.
 const DRAGON = { x: 1940, baseY: 164, w: 44, h: 30 };
@@ -64,7 +67,7 @@ interface Fly { x: number; y: number; cx: number; cy: number; ph: number; col: s
 interface Flyer { x: number; y: number; vx: number; vy: number; delay: number; ph: number; img: HTMLCanvasElement; near: boolean }
 // Objeto en el suelo (coordenadas de mundo). `baseY` decide el orden de dibujo.
 type Secret = 'none' | 'butterflies' | 'birds';
-type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier' | 'kiosk' | 'flower' | 'fence';
+type PropKind = 'bush' | 'trunk' | 'lamp' | 'bench' | 'gate' | 'barrier' | 'kiosk' | 'flower';
 interface Prop { kind: PropKind; img: HTMLCanvasElement; x: number; y: number; cx: number; baseY: number; r: number; secret: Secret; used: boolean; shake: number; solid?: { hw: number; depth: number }; hp?: number; variants?: HTMLCanvasElement[]; tree?: TreeState; t?: number; standing?: HTMLCanvasElement }
 // Lluvia (pantalla) y relámpago.
 interface Rain { x: number; y: number; v: number }
@@ -73,8 +76,8 @@ interface Bolt { pts: Pt[]; t: number }
 interface Strike { x: number; groundY: number; t: number }
 // Rama que cae rápido (mundo): sombra pequeña; si alcanza a Grecia, tropieza.
 interface Branch { x: number; groundY: number; h: number; v: number; rot: number }
-// Auto en la autopista, de perfil, en su carril.
-interface Car { x: number; lane: number; speed: number; img: HTMLCanvasElement; passed: boolean }
+// Auto en la autopista: t = 0 lejos … 1 cerca, en su carril.
+interface Car { t: number; lane: number; speed: number; img: HTMLCanvasElement; passed: boolean }
 type TreeState = 'stand' | 'shake' | 'fall' | 'down';
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
 interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
@@ -126,8 +129,8 @@ export class TitleScene {
   private readonly player: Player = { x: GIRL_START.x, y: GIRL_START.y, facing: 'up', moving: false, walkT: 0, sitting: false, stun: 0, knock: 0, running: false, stamina: 1, flower: false };
   private readonly branches: Branch[] = [];
   private readonly cars: Car[] = [];
-  private readonly carImgs: { right: HTMLCanvasElement[]; left: HTMLCanvasElement[] };
-  private readonly laneTimers = [1.2, 2.4, 0.8, 1.9];
+  private readonly carImgs: { front: HTMLCanvasElement[]; rear: HTMLCanvasElement[] };
+  private readonly laneTimers = [1.2, 2.6, 0.9, 2.1];
   private roadSeen = false;
   private runOver = false;
   private nextBranch = 2;
@@ -243,17 +246,15 @@ export class TitleScene {
     this.benchEmpty = renderBench(null);
     const hr = toCanvasesJ(JHAMMIL.side);
     this.himSprites = { up: toCanvasesJ(JHAMMIL.back), down: toCanvasesJ(JHAMMIL.front), right: hr, left: { idle: hr.idle.map(flipX), walk: hr.walk.map(flipX) } };
-    // La puerta queda en la acera de enfrente; la vereda de este lado termina en una baranda.
-    this.addProp('gate', renderGate(rng), 2226, ROAD.farWalk + 4, 16, { hw: 15, depth: 4 });
-    this.addProp('fence', renderFence(), ROAD.fence, 181, 4, { hw: 4, depth: 34 });
-    // Farolas de la acera de enfrente.
-    for (const x of [2024, 2124, 2214]) {
-      this.addProp('lamp', renderLamp(1), x, ROAD.farWalk - 2, 3);
-      this.lights.push({ x, y: ROAD.farWalk - 2 - 39, r: 11, col: '255,236,190', a: 0.45 });
+    this.addProp('gate', renderGate(rng), 2232, 160, 16, { hw: 15, depth: 4 });
+    // Farolas de la autopista a ambos lados, y el resplandor de la ciudad al fondo.
+    for (const t of ROAD_LAMPS) {
+      const s = roadS(t), h = Math.round(20 * s) + 6;
+      for (const side of [-1, 1]) this.lights.push({ x: roadX(t, side * 1.08) + side * 4 - side * (6 * s + 2), y: roadY(t) - h, r: 4 + 6 * s, col: '255,236,190', a: 0.22 + 0.25 * s });
     }
+    this.lights.push({ x: roadCX(0), y: ROAD.vanishY - 2, r: 14, col: '255,225,190', a: 0.28 });
     const colors = ['#e8e6ea', '#c8443f', '#3b4a6b', '#8a8f99', '#d9b86a'];
-    const carsRight = colors.map((c) => renderCar(c));
-    this.carImgs = { right: carsRight, left: carsRight.map(flipX) };
+    this.carImgs = { front: colors.map((c) => renderCar(true, c)), rear: colors.map((c) => renderCar(false, c)) };
     // El kiosco rojo: bajo su toldo los rayos no llegan.
     this.addProp('kiosk', renderKiosk(), KIOSK.x, KIOSK.baseY, 14);
     this.lights.push({ x: KIOSK.x + 1, y: KIOSK.baseY - 22, r: 6, col: '255,225,170', a: 0.3 });
@@ -435,7 +436,6 @@ export class TitleScene {
 
   private blocked(x: number, y: number): boolean {
     const fx = x + GIRL_W / 2, fy = y + GIRL_H - 1;
-    if (fy < minFeetAt(fx)) return true; // fuera de la franja de suelo de ese tramo
     for (const pr of this.props) {
       if (!pr.solid) continue;
       if (Math.abs(fx - pr.cx) < pr.solid.hw && fy > pr.baseY - pr.solid.depth && fy < pr.baseY + pr.solid.depth + 1) return true;
@@ -476,7 +476,7 @@ export class TitleScene {
       }
     }
     const nx = Math.min(WORLD_W - GIRL_W + 2, Math.max(-2, p.x + ax * SPEED_X * mult * dt));
-    const ny = Math.min(VH - GIRL_H, Math.max(minFeetAt(nx + GIRL_W / 2) - GIRL_H + 1, p.y + ay * SPEED_Y * mult * dt));
+    const ny = Math.min(VH - GIRL_H, Math.max(HORIZON - GIRL_H + 2, p.y + ay * SPEED_Y * mult * dt));
     if (!this.blocked(nx, ny)) { p.x = nx; p.y = ny; }
     else if (!this.blocked(nx, p.y)) p.x = nx;
     else if (!this.blocked(p.x, ny)) p.y = ny;
@@ -628,29 +628,32 @@ export class TitleScene {
     }
   }
 
-  // Autopista: autos de perfil por cuatro carriles. Si uno pisa a Grecia o a
-  // Jhammil, vuelven a la banca.
+  // Autopista: por los carriles de la derecha vienen autos creciendo; por los
+  // de la izquierda se alejan. Si uno pisa a Grecia o a Jhammil, vuelven a la banca.
   private updateHighway(dt: number): void {
     const p = this.player, r = this.rng;
-    if (!this.roadSeen && p.x > ROAD.x0 - 120) { this.roadSeen = true; this.events.push('road'); }
-    const active = p.x > ROAD.x0 - 380;
+    if (!this.roadSeen && p.x > ROAD.cx - 210) { this.roadSeen = true; this.events.push('road'); }
+    const active = p.x > ROAD.cx - 420 && p.x < ROAD.cx + 320;
     const fx = p.x + GIRL_W / 2, fy = p.y + GIRL_H - 1;
     const hx = this.him.x + GIRL_W / 2, hy = this.him.y + HIM_H - 1;
-    for (let i = 0; i < LANES.length; i++) {
+    for (let i = 0; i < ROAD_LANES.length; i++) {
       this.laneTimers[i] -= dt;
       if (active && this.laneTimers[i] <= 0) {
-        const L = LANES[i];
-        this.cars.push({ x: L.dir > 0 ? this.camX - 60 : this.camX + VW + 40, lane: i, speed: r.range(62, 108), img: r.pick(L.dir > 0 ? this.carImgs.right : this.carImgs.left), passed: false });
-        this.laneTimers[i] = r.range(1.8, 4.2);
+        const L = ROAD_LANES[i];
+        this.cars.push({ t: L.coming ? 0 : 1.12, lane: i, speed: r.range(0.36, 0.5), img: r.pick(L.coming ? this.carImgs.front : this.carImgs.rear), passed: false });
+        this.laneTimers[i] = r.range(2.4, 5);
       }
     }
     for (let i = this.cars.length - 1; i >= 0; i--) {
-      const c = this.cars[i], L = LANES[c.lane];
-      c.x += L.dir * c.speed * dt;
-      if (c.x < this.camX - 120 || c.x > this.camX + VW + 120) { this.cars.splice(i, 1); continue; }
-      const w = 24 * L.s;
-      const hits = (x: number, y: number) => Math.abs(y - L.y) < 5 && x > c.x - 2 && x < c.x + w + 2;
-      if (!c.passed && Math.abs(L.y - fy) < 18 && ((L.dir > 0 && c.x > fx) || (L.dir < 0 && c.x + w < fx))) { c.passed = true; if (Math.abs(c.x - fx) < 40) this.events.push('sfx:whoosh'); }
+      const c = this.cars[i], L = ROAD_LANES[c.lane];
+      // Velocidad en t más lenta lejos (parece constante en perspectiva).
+      const v = c.speed * (0.35 + 0.65 * c.t);
+      c.t += (L.coming ? 1 : -1) * v * dt;
+      if (c.t > 1.15 || c.t < -0.02) { this.cars.splice(i, 1); continue; }
+      const cx = roadX(c.t, L.off), cy = roadY(c.t), s = roadS(c.t);
+      const hw = 10 * s + 2;
+      const hits = (x: number, y: number) => Math.abs(x - cx) < hw && Math.abs(y - cy) < 6;
+      if (!c.passed && cy > fy - 7 && cy < fy + 7 && Math.abs(cx - fx) < 80) { c.passed = true; this.events.push('sfx:whoosh'); }
       if (!this.runOver && !p.sitting && (hits(fx, fy) || (this.him.active && hits(hx, hy)))) {
         this.runOver = true;
         p.moving = false; p.stun = 99;
@@ -1000,11 +1003,12 @@ export class TitleScene {
       if (dx < VW && dx + DRAGON.w > 0) items.push({ baseY: d.state === 'fly' ? 9999 : DRAGON.baseY, draw: () => ctx.drawImage(img, dx, dy) });
     }
     for (const c of this.cars) {
-      const L = LANES[c.lane];
-      const w = Math.round(24 * L.s), h = Math.round(10 * L.s);
-      const dx = Math.round(c.x) - cam, dy = L.y - h;
+      const L = ROAD_LANES[c.lane];
+      const cx = roadX(c.t, L.off), cy = roadY(c.t), s = roadS(c.t);
+      const w = Math.max(3, Math.round(20 * s)), h = Math.max(2, Math.round(11 * s));
+      const dx = Math.round(cx - w / 2) - cam, dy = Math.round(cy - h);
       if (dx > VW || dx + w < 0) continue;
-      items.push({ baseY: L.y, draw: () => ctx.drawImage(c.img, dx, dy, w, h) });
+      items.push({ baseY: cy, draw: () => ctx.drawImage(c.img, dx, dy, w, h) });
     }
     if (withPlayer && this.him.active) {
       const h = this.him;
@@ -1237,19 +1241,18 @@ export class TitleScene {
     }
     const stormK = stormAt(this.camX + VW / 2) * (1 - this.calm());
     if (stormK > 0) { haze.fillStyle = `rgba(38,42,70,${(0.32 * stormK).toFixed(3)})`; haze.fillRect(0, 0, SW, SH); }
-    // Faros hacia adelante y luces rojas atrás de cada auto.
+    // Faros de los autos que vienen y luces rojas de los que se van.
     for (const c of this.cars) {
-      const L = LANES[c.lane], w = 24 * L.s;
-      const front = L.dir > 0 ? c.x + w : c.x, back = L.dir > 0 ? c.x : c.x + w;
-      const sy = (L.y - 4 * L.s) / 4;
-      for (const [x, col, a, rr] of [[front + L.dir * 6, '255,240,200', 0.4, 3.2], [back, '255,90,90', 0.22, 1.6]] as [number, string, number, number][]) {
-        const sx = (x - cam) / 4;
-        if (sx < -rr * 2 || sx > SW + rr * 2) continue;
-        const g = haze.createRadialGradient(sx, sy, 0, sx, sy, rr * 2);
-        g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(1, `rgba(${col},0)`);
-        haze.fillStyle = g;
-        haze.fillRect(sx - rr * 2, sy - rr * 2, rr * 4, rr * 4);
-      }
+      const L = ROAD_LANES[c.lane];
+      const cx = roadX(c.t, L.off), cy = roadY(c.t), s = roadS(c.t);
+      const sx = (cx - cam) / 4, sy = (cy - 5 * s) / 4, rr = (L.coming ? 4.5 : 2.2) * s + 0.8;
+      if (sx < -rr * 2 || sx > SW + rr * 2) continue;
+      const g = haze.createRadialGradient(sx, sy, 0, sx, sy, rr * 2.2);
+      const col = L.coming ? '255,240,200' : '255,90,90';
+      g.addColorStop(0, `rgba(${col},${(L.coming ? 0.5 : 0.32) * Math.min(1, s)})`);
+      g.addColorStop(1, `rgba(${col},0)`);
+      haze.fillStyle = g;
+      haze.fillRect(sx - rr * 2.2, sy - rr * 2.2, rr * 4.4, rr * 4.4);
     }
     // Faroles y ventana encendidos.
     for (const l of this.lights) {
@@ -1630,7 +1633,7 @@ function bushSpots(rng: Rng, props: Prop[]): [number, number, number][] {
     if (x > STORM.x0 - 20 && x < STORM.x1 + 20) continue; // en la tormenta solo hay problemas
     if (Math.abs(x - BENCH.x) < 52) continue; // espacio libre alrededor de la banca
     if (Math.abs(x - DRAGON.x - DRAGON.w / 2) < 44) continue; // y alrededor de Chimuelo
-    if (x > ROAD.x0 - 30) continue; // la autopista y la acera de enfrente
+    if (Math.abs(x - ROAD.cx) < 118) continue; // la autopista
     if (props.some((pr) => pr.solid && Math.abs(pr.cx - x) < pr.solid.hw + r + 4 && Math.abs(pr.baseY - baseY) < 10)) continue;
     spots.push([x, baseY, r]);
   }
@@ -1870,58 +1873,74 @@ function renderFallenTrunk(rng: Rng, hp: number): HTMLCanvasElement {
   return pb.toCanvas();
 }
 
-// Autopista horizontal: acera de enfrente con baranda, cuatro carriles con
-// líneas, bordillos y paso de cebra. Entra en escena doblando desde el fondo.
+// Autopista en perspectiva, ancha y con curva suave hacia el fondo: asfalto,
+// cuatro carriles, guardarraíl, farolas a ambos lados y paso de cebra.
 function paintHighway(pb: PixelBuffer, rng: Rng): void {
-  const { x0, top, bottom, farWalk, crossing } = ROAD;
-  const asphalt = hex('#3b3b46'), asphaltL = hex('#474752'), white = hex('#e6e2d8'), yellow = hex('#d8c26a');
-  // Acera de enfrente, de baldosas, con baranda al fondo.
-  for (let y = farWalk - 5; y <= top - 1; y++) {
-    for (let x = x0; x < WORLD_W; x++) {
-      const seam = (y - farWalk) % 5 === 4 || ((x + ((y - farWalk) / 5 | 0) * 4) % 9 === 8);
-      pb.set(x, y, hex(seam ? C.pavementSeam : C.pavement));
+  const { vanishY, nearY } = ROAD;
+  const asphalt = hex('#3b3b46'), asphaltL = hex('#474752'), white = hex('#e6e2d8'), yellow = hex('#d8c26a'), rail = hex('#9a9aa6'), post = hex('#6a6a76');
+  // Calzada: se rellena por franjas horizontales siguiendo la curva.
+  for (let y = vanishY; y <= nearY; y++) {
+    const t = (y - vanishY) / (nearY - vanishY);
+    pb.hline(roadX(t, -1), roadX(t, 1), y, asphalt);
+  }
+  for (let i = 0; i < 900; i++) { const t = Math.sqrt(rng.next()); pb.set(Math.round(roadX(t, rng.range(-1, 1))), Math.round(roadY(t)), asphaltL); }
+  // Arcenes de grava a los lados.
+  for (let y = vanishY + 6; y <= nearY; y++) {
+    const t = (y - vanishY) / (nearY - vanishY), w = Math.round(2 + 5 * t);
+    pb.hline(roadX(t, -1) - w, roadX(t, -1) - 1, y, hex('#6d6a66')); pb.hline(roadX(t, 1) + 1, roadX(t, 1) + w, y, hex('#6d6a66'));
+  }
+  // Líneas: bordes blancos, divisores discontinuos, central amarilla doble.
+  for (let y = vanishY + 2; y <= nearY; y++) {
+    const t = (y - vanishY) / (nearY - vanishY);
+    pb.set(Math.round(roadX(t, -1)) + 1, y, white); pb.set(Math.round(roadX(t, 1)) - 1, y, white);
+    const dash = Math.floor(t * t * 40) % 2 === 0;
+    if (dash) { pb.set(Math.round(roadX(t, -0.5)), y, white); pb.set(Math.round(roadX(t, 0.5)), y, white); }
+    const cx = roadX(t, 0);
+    if (t > 0.5) { pb.set(Math.round(cx) - 1, y, yellow); pb.set(Math.round(cx) + 1, y, yellow); } else pb.set(Math.round(cx), y, yellow);
+  }
+  // Guardarraíl: postes que crecen al acercarse.
+  for (let t = 0.08; t <= 1; t += 0.055) {
+    const y = Math.round(roadY(t)), h = Math.max(2, Math.round(8 * roadS(t))), s = roadS(t), w = Math.round(2 + 5 * t);
+    for (const side of [-1, 1]) {
+      const x = Math.round(roadX(t, side)) + side * (w + 2);
+      pb.rect(x, y - h, 1, h, post); pb.rect(x - 1, y - h, 3, Math.max(1, Math.round(s)), rail);
     }
   }
-  for (let x = x0 + 6; x < WORLD_W; x += 12) { pb.rect(x, farWalk - 10, 1, 5, hex('#6a6a76')); }
-  pb.rect(x0, farWalk - 9, WORLD_W - x0, 1, hex('#9a9aa6'));
-  pb.rect(x0, top - 1, WORLD_W - x0, 1, hex('#c9c4bb')); // bordillo lejano
-  // Calzada. A la izquierda dobla hacia el fondo (se estrecha).
-  pb.rect(x0, top, WORLD_W - x0, bottom - top + 1, asphalt);
-  pb.poly([[x0 - 46, top], [x0, top], [x0, bottom + 1], [x0 - 8, bottom + 1]], asphalt);
-  pb.rect(x0 - 46, farWalk - 5, 46, top - farWalk + 5, hex(C.pavement));
-  for (let i = 0; i < 700; i++) pb.set(x0 - 40 + rng.int(WORLD_W - x0 + 40), top + rng.int(bottom - top), asphaltL);
-  pb.rect(x0 - 8, bottom + 1, WORLD_W - x0 + 8, 1, hex(C.curb)); // bordillo cercano
-  // Líneas: bordes blancos y separadores discontinuos; la del medio, amarilla.
-  pb.rect(x0, top + 1, WORLD_W - x0, 1, white); pb.rect(x0, bottom - 1, WORLD_W - x0, 1, white);
-  for (let x = x0 + 2; x < WORLD_W; x += 12) {
-    pb.rect(x, 133, 6, 1, white); pb.rect(x, 155, 6, 1, white);
-    pb.rect(x, 144, 7, 1, yellow);
+  // Farolas altas a ambos lados, con el brazo sobre la calzada.
+  for (const t of ROAD_LAMPS) {
+    const s = roadS(t), y = Math.round(roadY(t)), h = Math.round(20 * s) + 6, arm = Math.round(6 * s) + 2, w = Math.round(2 + 5 * t);
+    for (const side of [-1, 1]) {
+      const x = Math.round(roadX(t, side)) + side * (w + 4);
+      pb.rect(x, y - h, Math.max(1, Math.round(s)), h, hex('#5a5560'));
+      pb.rect(side < 0 ? x : x - arm, y - h, arm + 1, 1, hex('#5a5560'));
+      pb.rect(side < 0 ? x + arm - 1 : x - arm, y - h, 2, 2, hex(C.lampLight));
+    }
   }
-  // Paso de cebra: barras verticales sobre los carriles.
-  for (let x = crossing; x < crossing + 40; x += 8) pb.rect(x, top + 2, 4, bottom - top - 3, [230, 226, 216, 150]);
-  // La vereda de este lado sigue de baldosa hasta la baranda.
-  for (let y = bottom + 2; y < 167; y++) for (let x = x0; x < WORLD_W; x++) pb.set(x, y, hex((x + y) % 7 === 0 ? C.pavementSeam : C.pavement));
+  // Paso de cebra: barras horizontales a lo ancho, a la altura de la vereda.
+  for (const y of [168, 172, 176]) {
+    const t = (y - vanishY) / (nearY - vanishY);
+    pb.rect(Math.round(roadX(t, -1)) + 3, y, Math.round(roadX(t, 1)) - Math.round(roadX(t, -1)) - 6, 2, [230, 226, 216, 170]);
+  }
+  // Bordillos donde la vereda llega a la calzada.
+  for (const side of [-1, 1]) {
+    const t0 = (150 - vanishY) / (nearY - vanishY);
+    for (let y = 150; y < 182; y++) { const t = (y - vanishY) / (nearY - vanishY); pb.set(Math.round(roadX(t, side)) + side * (Math.round(2 + 5 * t) + 1), y, hex(C.curb)); }
+    void t0;
+  }
 }
 
-// Baranda que corta la vereda: hay que cruzar por la autopista.
-function renderFence(): HTMLCanvasElement {
-  const pb = new PixelBuffer(10, 36);
-  const post = hex('#6a6a76'), rail = hex('#9a9aa6');
-  pb.rect(4, 2, 2, 32, post);
-  for (const y of [4, 12, 20, 28]) pb.rect(1, y, 8, 1, rail);
-  pb.rect(1, 2, 8, 1, rail);
-  return pb.toCanvas();
-}
-
-// Auto de perfil mirando a la derecha, 24×10: faros adelante, luces rojas atrás.
-function renderCar(color: string): HTMLCanvasElement {
-  const pb = new PixelBuffer(24, 10);
+// Auto visto de frente (faros) o de atrás (luces rojas), 20×11.
+function renderCar(front: boolean, color: string): HTMLCanvasElement {
+  const pb = new PixelBuffer(20, 11);
   const body = hex(color), dark = hex('#1e1c26'), glass = hex('#2a2f45'), chrome = hex('#b9bcc6');
-  pb.rect(6, 0, 12, 4, dark); pb.rect(7, 1, 10, 3, glass); pb.rect(12, 1, 1, 3, dark);
-  pb.rect(0, 3, 24, 5, dark); pb.rect(1, 3, 22, 4, body); pb.rect(3, 3, 18, 1, mix(color, '#ffffff', 0.35));
-  pb.rect(22, 4, 2, 2, hex('#fff6d6')); pb.rect(0, 4, 2, 2, hex('#ff5a5a'));
-  pb.rect(2, 7, 20, 1, chrome);
-  pb.circle(5, 8, 2, dark); pb.circle(18, 8, 2, dark); pb.set(5, 8, chrome); pb.set(18, 8, chrome);
+  pb.rect(4, 0, 12, 4, dark); pb.rect(5, 1, 10, 3, glass);
+  if (!front) pb.rect(6, 1, 8, 1, hex('#4a5270'));
+  pb.rect(0, 4, 20, 6, dark); pb.rect(1, 4, 18, 5, body);
+  pb.rect(2, 4, 16, 1, mix(color, '#ffffff', 0.35));
+  if (front) { pb.rect(2, 6, 3, 2, hex('#fff6d6')); pb.rect(15, 6, 3, 2, hex('#fff6d6')); pb.rect(7, 7, 6, 1, dark); pb.rect(8, 6, 4, 1, chrome); }
+  else { pb.rect(2, 6, 3, 2, hex('#ff5a5a')); pb.rect(15, 6, 3, 2, hex('#ff5a5a')); pb.rect(8, 7, 4, 1, hex('#e6e2d8')); }
+  pb.rect(0, 9, 20, 1, chrome);
+  pb.rect(1, 10, 4, 1, dark); pb.rect(15, 10, 4, 1, dark);
   return pb.toCanvas();
 }
 
