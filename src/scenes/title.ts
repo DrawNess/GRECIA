@@ -77,9 +77,10 @@ interface Star { x: number; y: number; ph: number }
 interface Firefly { x: number; y: number; vx: number; vy: number; ph: number }
 interface Meteor { x: number; y: number; vx: number; vy: number; t: number }
 interface DirCanvases { idle: HTMLCanvasElement[]; walk: HTMLCanvasElement[] }
-// Jhammil cuando la acompaña: sigue el rastro de Grecia.
-interface Follower { active: boolean; x: number; y: number; facing: Facing; moving: boolean; walkT: number }
+// Jhammil cuando la acompaña: camina a su lado, de la mano.
+interface Follower { active: boolean; x: number; y: number; facing: Facing; moving: boolean; walkT: number; side: number; holding: boolean; everHeld: boolean }
 const HIM_H = 26;
+const HAND_GAP = 10; // separación horizontal entre los dos cuando van de la mano
 
 const PETAL_COLS = [C.lilac, C.lilacLight, C.lilacMid, C.lilacPale];
 
@@ -120,8 +121,7 @@ export class TitleScene {
   private readonly carried: HTMLCanvasElement;
   private readonly himSprites: Record<Facing, DirCanvases>;
   private readonly benchEmpty: HTMLCanvasElement;
-  private readonly him: Follower = { active: false, x: 0, y: 0, facing: 'left', moving: false, walkT: 0 };
-  private readonly trail: Pt[] = [];
+  private readonly him: Follower = { active: false, x: 0, y: 0, facing: 'left', moving: false, walkT: 0, side: 1, holding: false, everHeld: false };
   private zoom = 1;
   private zoomTarget = 1;
   private busy = false;       // hay una charla abierta: el teclado es de la caja de diálogo
@@ -492,28 +492,40 @@ export class TitleScene {
     if (bench) bench.img = this.benchEmpty;
     this.him.active = true;
     this.him.x = BENCH.x + 6; this.him.y = BENCH.baseY + 4 - HIM_H + 1; this.him.facing = 'left';
-    this.trail.length = 0;
+    this.him.side = 1;
     this.nearProp = null;
   }
 
-  // Jhammil sigue el rastro de Grecia, unos pasos atrás.
+  // Jhammil camina al lado de Grecia, de la mano: se pone del lado contrario
+  // a donde ella mira (un paso atrás) y sigue su ritmo. Si ella se da la
+  // vuelta, él pasa por detrás y le toma la mano del otro lado.
   private updateFollower(dt: number): void {
     const h = this.him, p = this.player;
     if (!h.active) return;
-    const last = this.trail[this.trail.length - 1];
-    if (!last || Math.hypot(p.x - last[0], p.y - last[1]) >= 4) { this.trail.push([p.x, p.y]); if (this.trail.length > 40) this.trail.shift(); }
-    const target = this.trail.length > 6 ? this.trail[this.trail.length - 6] : [p.x - 18, p.y] as Pt;
-    const dx = target[0] - h.x, dy = target[1] + (GIRL_H - HIM_H) - h.y;
+    if (p.moving && (p.facing === 'left' || p.facing === 'right')) h.side = p.facing === 'right' ? -1 : 1;
+    const tx = p.x + h.side * HAND_GAP, ty = p.y - 1 + (GIRL_H - HIM_H);
+    const dx = tx - h.x, dy = ty - h.y;
     const d = Math.hypot(dx, dy);
-    if (d > 2 && !p.sitting) {
-      const sp = Math.min(d / dt, (p.running ? SPEED_X * RUN_MULT : SPEED_X) * 1.05);
+    if (d > 1 && !p.sitting) {
+      const base = p.running ? SPEED_X * RUN_MULT : SPEED_X;
+      const sp = Math.min(d / dt, base * 1.4 + 12);
       h.x += (dx / d) * sp * dt; h.y += (dy / d) * sp * dt;
-      h.moving = true; h.walkT += dt * (p.running ? RUN_MULT : 1);
-      h.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+      h.moving = p.moving || d > 4;
+      h.walkT += dt * (p.running ? RUN_MULT : 1);
+      h.facing = p.moving ? p.facing : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
     } else {
       h.moving = false; h.walkT = 0;
-      if (!p.sitting && Math.abs(p.x - h.x) > 3) h.facing = p.x > h.x ? 'right' : 'left';
+      if (!p.sitting) h.facing = p.facing;
     }
+    // Van de la mano cuando están a la distancia justa.
+    const near = Math.abs(h.x - (p.x + h.side * HAND_GAP)) < 2.5 && Math.abs(h.y - ty) < 3;
+    if (near && !h.holding && !h.everHeld) {
+      h.everHeld = true;
+      this.events.push('sfx:twinkle');
+      const r = this.rng;
+      for (let i = 0; i < 3; i++) this.critters.push({ kind: 'heart', x: p.x + h.side * 5 + 6, y: p.y + 8, vx: r.range(-6, 6), vy: -r.range(12, 20), ph: r.range(0, 6.28), t: -i * 0.15, life: 2.2, col: r.pick(['#f38fb1', '#f7a8c4']) });
+    }
+    h.holding = near;
   }
 
   // J sobre un arbusto: se sacude y suelta lo que esconde (una sola vez).
@@ -939,6 +951,15 @@ export class TitleScene {
           ctx.drawImage(this.girlShadow, gx - wob, gy - bob + GIRL_H - 2);
           ctx.drawImage(img, gx, gy);
           if (p.flower) this.drawCarried(ctx, gx, gy, p.facing);
+          if (this.him.holding && !p.sitting) {
+            // Sus manos, unidas: dos o tres píxeles de piel entre los dos.
+            const hx = Math.round(this.him.x) - cam;
+            const x0 = this.him.side < 0 ? hx + 10 : gx + 10, x1 = this.him.side < 0 ? gx + 2 : hx + 1;
+            ctx.fillStyle = C.skin;
+            ctx.fillRect(Math.min(x0, x1), gy + 15, Math.abs(x1 - x0) + 1, 1);
+            ctx.fillStyle = C.skinShade;
+            ctx.fillRect(Math.min(x0, x1), gy + 16, Math.abs(x1 - x0) + 1, 1);
+          }
         } });
       }
     }

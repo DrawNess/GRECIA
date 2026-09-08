@@ -68,8 +68,9 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   aparece en una etiqueta al acercarse. Al sentarse con J: **la cámara se
   acerca 2×** y aparece la **caja de diálogo** con el poema de Jhammil
   (`src/content/story.ts`, máquina de escribir, J/Enter pasa). Al terminar
-  se paran los dos y **Jhammil la sigue** a donde vaya (sprites de pie y
-  caminata, sigue su rastro unos pasos atrás). Con J junto a la banca, Grecia se sienta a su
+  se paran los dos, se toman de la mano (corazoncitos) y **Jhammil camina a
+  su lado, de la mano**, a donde ella vaya; si ella se da la vuelta, él pasa
+  por detrás y le toma la mano del otro lado. Con J junto a la banca, Grecia se sienta a su
   lado y quedan mirándose; cualquier flecha la levanta.
 - Después de la banca, **Chimuelo** (dragón negro) duerme sobre el pasto
   soltando "z"; cuando Grecia se acerca despierta, suelta corazones y se va

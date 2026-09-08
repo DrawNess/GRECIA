@@ -49,8 +49,9 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
    - Tramo 4 (noche): tercer árbol, farol, **la banca grande con Jhammil**
      sentado; con J Grecia se sienta a su lado y se miran (etiqueta con su
      nombre). La cámara se acerca 2× y aparece la caja de diálogo con el
-     poema de Jhammil (`story.benchTalk`); al terminar se paran y Jhammil la
-     sigue el resto del paseo (`him`, sigue el rastro de Grecia). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
+     poema de Jhammil (`story.benchTalk`); al terminar se paran, se toman de la mano y Jhammil
+     camina a su lado el resto del paseo (`him`, del lado contrario a donde
+     ella mira, con las manos unidas dibujadas entre los dos). Después, **Chimuelo** (dragón negro) durmiendo: al acercarse
      despierta, suelta corazones y se va volando; vuelve a dormirse si ella
      se aleja un rato.
    - Puerta de jardín cerrada al final (meta provisional).
@@ -136,9 +137,11 @@ scripts/hash.mjs           `pnpm hash`
   `showDialog(story.benchTalk)`; al terminar `afterTalk()`: banca vacía,
   `him.active`, zoom 1. El zoom se hace re-dibujando la capa nítida (y la
   haze) sobre sí mismas ampliadas, centradas en la banca.
-- **Jhammil acompañante** (`updateFollower`): guarda un rastro de posiciones
-  de Grecia cada 4 px y camina hacia el punto 6 atrás; sprites `JHAMMIL`
-  (perfil/espaldas/frente, 12×26, caminata de 4 cuadros).
+- **Jhammil acompañante** (`updateFollower`): se coloca a `HAND_GAP` (10 px)
+  del lado contrario a donde mira Grecia, un píxel atrás en profundidad, y
+  sigue su velocidad; `holding` cuando está en su sitio → se dibujan las
+  manos unidas (píxeles de piel entre ambos) al dibujar a Grecia. Sprites
+  `JHAMMIL` (perfil/espaldas/frente, 12×26, caminata de 4 cuadros).
 - **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
   hay tormenta; estrella fugaz cada 12–26 s.
 - **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;
