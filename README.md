@@ -15,5 +15,6 @@ pnpm hash "TEXTO"  # sha256 para las respuestas de src/content/gate.ts
 - **Dónde cambiar cada texto** (menú, poema, carta…): `docs/CONTEXTO.md` §5b
   — en corto, `src/content/gate.ts` y `src/content/story.ts`.
 
-Se publica solo en GitHub Pages al hacer `git push` a `main`
+Publicado en **https://drawness.github.io/GRECIA/** (con `GRECIA` en
+mayúsculas: la ruta distingue mayúsculas). Se publica solo al hacer `git push` a `main`
 (ver `.github/workflows/deploy.yml` y la sección de despliegue en el contexto).

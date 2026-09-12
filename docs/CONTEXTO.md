@@ -316,7 +316,12 @@ Una sola vez:
 4. En ~1 minuto queda publicado en `https://TU_USUARIO.github.io/grecia/`.
    El progreso del workflow se ve en la pestaña **Actions**.
 
-Repo real: `DrawNess/GRECIA` → `https://drawness.github.io/GRECIA/`.
+Repo real: `DrawNess/GRECIA` → **`https://drawness.github.io/GRECIA/`**
+(con `GRECIA` en MAYÚSCULAS: GitHub Pages distingue mayúsculas en la ruta;
+`/grecia/` o `/Grecia/` dan 404). Comprobado el 2026-09-12: carga, se
+escribe el nombre y entra al juego sin errores. Si algún día se quiere una
+URL en minúsculas, renombrar el repo a `grecia` en GitHub (Settings →
+Rename) y luego `git remote set-url origin git@github.com:DrawNess/grecia.git`.
 
 Notas:
 - El repo debe ser **público**: con repo privado, la página de Pages pide
@@ -356,7 +361,8 @@ Primero, en casa:
 1. `git clone git@github.com:DrawNess/GRECIA.git && cd GRECIA && pnpm install && pnpm dev`.
 2. Publicar: hacer el repo **público** (Settings → Danger Zone), luego
    Settings → Pages → Source: **GitHub Actions**, y re-correr el workflow
-   (Actions → Re-run) o hacer un push. URL: `https://drawness.github.io/GRECIA/`.
+   (Actions → Re-run) o hacer un push. URL exacta: `https://drawness.github.io/GRECIA/`
+   (mayúsculas obligatorias en `GRECIA`).
 3. Si se trabaja con Claude Code, empezar con: *"Lee docs/CONTEXTO.md y
    PLAN.md. Seguimos con la caja de diálogo."* Claude de esta máquina tenía
    además notas de memoria locales; todo lo importante está en este archivo.
