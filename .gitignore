@@ -3,6 +3,9 @@ dist
 *.local
 .DS_Store
 
-# Notas de trabajo: solo locales, nunca al repo público
+# solo local
 docs/
 PLAN.md
+arts/
+scripts/sprites-png.mjs
+scripts/escena-png.mjs
