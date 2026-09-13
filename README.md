@@ -185,22 +185,3 @@ otro número (por ejemplo `5174`), usa ese.
 computadora, no en el celular: está hecho para teclado.
 
 **Cualquier otra cosa** · Escríbeme. Para eso estoy.
-
----
-
-## Para el autor (desarrollo)
-
-```sh
-pnpm install       # una vez (o npm install)
-pnpm dev           # http://localhost:5173
-pnpm build         # tsc + vite → dist/
-pnpm hash "TEXTO"  # sha256 para las respuestas de src/content/gate.ts
-```
-
-- Contexto completo (qué es, arquitectura, contenido, pendientes, despliegue):
-  `docs/CONTEXTO.md`. Estado por etapas: `PLAN.md`.
-- Dónde cambiar cada texto: `docs/CONTEXTO.md` §5b, en corto
-  `src/content/gate.ts` y `src/content/story.ts`.
-- Cada `git push` a `main` publica `dist/` en GitHub Pages
-  (`.github/workflows/deploy.yml`): **https://drawness.github.io/GRECIA/**
-  (con `GRECIA` en mayúsculas: la ruta distingue mayúsculas).
