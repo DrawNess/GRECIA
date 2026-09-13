@@ -1,6 +1,6 @@
 # Grecia
 
-> Un paseo entre lilas. Un juego en pixel art, hecho ti GRECIA.
+> Un paseo entre lilas. Un juego en pixel art, hecho para ti GRECIA mi AMOR.
 
 Hola, Grecia.
 
