@@ -48,5 +48,16 @@ export class Input {
     return hit;
   }
 
+  /** Consume las letras tecleadas (a–z y espacio), en orden. Para "las palabras". */
+  takeLetters(): string[] {
+    const out: string[] = [];
+    for (const code of this.pressed) {
+      const m = /^Key([A-Z])$/.exec(code);
+      if (m) { out.push(m[1].toLowerCase()); this.pressed.delete(code); }
+      else if (code === 'Space') { out.push(' '); this.pressed.delete(code); }
+    }
+    return out;
+  }
+
   endFrame(): void { this.pressed.clear(); }
 }

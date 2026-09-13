@@ -13,7 +13,7 @@ import { writeSave, resetSave } from './engine/save';
 import { TitleScene } from './scenes/title';
 import { FinaleScene } from './scenes/finale';
 import { mountGate, showCaption, clearCaptions } from './ui/gate';
-import { showDialog } from './ui/dialog';
+import { showConversation, showDialog } from './ui/dialog';
 import { story } from './content/story';
 import { gate } from './content/gate';
 
@@ -60,6 +60,17 @@ link.rel = 'icon';
 link.href = fav.toDataURL();
 document.head.appendChild(link);
 
+// La palabra en juego (las palabras): letras que se encienden al escribirlas
+// y una barra con el tiempo que queda.
+const wordEl = document.createElement('div');
+wordEl.className = 'word';
+wordEl.hidden = true;
+wordEl.innerHTML = '<div class="word__text"></div><div class="word__bar"><i></i></div>';
+stage.ui.appendChild(wordEl);
+const wordText = wordEl.querySelector<HTMLElement>('.word__text')!;
+const wordBar = wordEl.querySelector<HTMLElement>('.word__bar > i')!;
+let wordKey = '';
+
 // Etiqueta con nombre que sigue a un punto de la escena.
 const tagEl = document.createElement('div');
 tagEl.className = 'tag';
@@ -77,11 +88,17 @@ const step = (dt: number) => {
     else if (e === 'shelter') showCaption(stage.ui, gate.shelterHint, 5000);
     else if (e === 'flower') showCaption(stage.ui, gate.flowerHint, 6000);
     else if (e === 'road') showCaption(stage.ui, gate.roadHint, 6000);
+    else if (e === 'words') showCaption(stage.ui, gate.wordsHint, 8000);
+    else if (e === 'talk:words') showDialog(stage.ui, story.wordsTalk.intro.map((text) => ({ who: story.himName, text })), () => scene.afterWordsIntro());
+    else if (e === 'word:fail:first') showCaption(stage.ui, `${story.himName}: ${story.wordsTalk.failFirst.replace('\n', ' ')}`, 4000);
+    else if (e === 'word:fail') showCaption(stage.ui, `${story.himName}: ${story.wordsTalk.fail[Math.floor(Math.random() * story.wordsTalk.fail.length)]}`, 3500);
+    else if (e === 'words:done') showCaption(stage.ui, `${story.himName}: ${story.wordsTalk.done}`, 5000);
+    else if (e === 'noflower') { showCaption(stage.ui, gate.noFlowerHint, 6000); setTimeout(() => showCaption(stage.ui, `${story.himName}: ${story.wordsTalk.noFlower}`, 6000), 6200); }
     else if (e === 'hit:car') backToBench();
     else if (e === 'sfx:whoosh') audio.whoosh();
     else if (e === 'sfx:horn') audio.horn();
-    else if (e === 'talk:farewell') showDialog(stage.ui, story.farewellTalk.lines.map((text) => ({ who: story.farewellTalk.who, text })), () => scene.afterFarewell());
-    else if (e === 'talk:bench') showDialog(stage.ui, story.benchTalk.lines.map((text) => ({ who: story.benchTalk.who, text })), () => scene.afterTalk());
+    else if (e === 'talk:farewell') showConversation(stage.ui, story.farewellTalk, { him: story.himName, her: story.herName }, () => scene.afterFarewell());
+    else if (e === 'talk:bench') showConversation(stage.ui, story.benchTalk, { him: story.himName, her: story.herName }, () => scene.afterTalk());
     else if (e === 'caught') backToMenu();
     else if (e.startsWith('sfx:thunder')) audio.thunder(Number(e.split(':')[2] ?? 1));
     else if (e === 'sfx:hit') audio.hit();
@@ -122,6 +139,28 @@ const draw = () => {
     tagEl.style.top = `calc(${tag.y} * var(--u))`;
   }
   tagEl.hidden = !tag;
+  const w = active instanceof TitleScene ? active.wordView() : null;
+  if (w) {
+    const key = `${w.text}|${w.typed}|${w.phase}|${w.shake}`;
+    if (key !== wordKey) {
+      wordKey = key;
+      wordText.innerHTML = '';
+      [...w.text].forEach((ch, i) => {
+        const l = document.createElement('span');
+        l.className = 'word__l' + (i < w.typed ? ' is-on' : '');
+        l.textContent = ch === ' ' ? '\u00a0' : ch;
+        wordText.appendChild(l);
+      });
+      wordEl.classList.toggle('is-bad', w.bad);
+      wordEl.classList.toggle('is-ok', w.phase === 'ok');
+      wordEl.classList.toggle('is-fail', w.phase === 'fail');
+      wordEl.classList.toggle('is-shake', w.shake);
+    }
+    wordBar.style.width = `${(w.left * 100).toFixed(1)}%`;
+    wordEl.style.left = `calc(${w.x} * var(--u))`;
+    wordEl.style.top = `calc(${w.y} * var(--u))`;
+  }
+  wordEl.hidden = !w;
 };
 startLoop(step, draw);
 

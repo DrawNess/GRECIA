@@ -27,7 +27,7 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
 2. **Entrada al juego**: el panel se desvanece, la niebla y el desenfoque se
    despejan, un golpe de viento se lleva las flores del frente por delante de
    la cámara, y Grecia queda bajo control.
-3. **Paseo** de 2920 px (9 pantallas) con cámara suave y parallax:
+3. **Paseo** de 4220 px (13 pantallas) con cámara suave y parallax:
    - Tramo 1 (día): el árbol grande, arbustos.
    - Tramo 2 (atardecer → noche al avanzar): farol, segundo árbol.
    - Tramo 3 (noche): **la esquina verde** — pared verde, y pegada a ella
@@ -61,16 +61,33 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
      cualquiera de los dos → fundido y vuelta a la banca (`respawnAtBench`),
      no al menú. (Jhammil prefirió esta versión a una horizontal tipo
      Frogger, que probamos y descartamos.)
-   - Tramo 6 (x ≥ 2230): **amanece y el paisaje se vuelve verde cruceño**
+   - Tramo 5½ (madrugada, x 2300–3460): **las palabras** (`updateWords`).
+     Van de la mano por un tramo oscuro con tres faroles y luciérnagas. Al
+     llegar, la cámara se acerca y Jhammil lo presenta en una charla corta (`story.wordsTalk.intro`,
+     evento `talk:words`, la última caja explica cómo se juega). En
+     cada parada (24, palabras y frases de `story.words`) una palabra aparece flotando entre
+     los dos con una barra de tiempo; Grecia la escribe con el teclado (sin
+     tildes) antes de que se apague. Letra correcta se enciende; letra
+     equivocada sacude la palabra y resta un poco de tiempo. Completada: las
+     difíciles (`bad`) se deshacen en cenizas grises que se lleva el viento,
+     las buenas florecen en corazones. Si se apaga: se sueltan un instante,
+     Jhammil dice `wordsTalk.failFirst` (la primera vez) o una de
+     `wordsTalk.fail` al azar, y la misma palabra
+     vuelve con un segundo más. No se pierde nunca; solo se repite. Al
+     terminar la última, `story.wordsTalk.done` y enseguida amanece.
+   - Tramo 6 (x ≥ 3530): **amanece y el paisaje se vuelve verde cruceño**
      (`greenAt`): colinas verdes tapan la ciudad en la capa lejana,
      palmeras lejanas en la media, suelo verde y tierra colorada, palmeras,
      toborochis, tajibo, plátanos, pájaros de colores. En `FAREWELL_X`
-     (2660) Jhammil se detiene, dice `story.farewellTalk`, se sueltan y él
+     (3960) Jhammil se detiene, dice `story.farewellTalk`, se sueltan y él
      se queda despidiéndola (`him.stayed`, `JHAMMIL_WAVE`); Grecia sigue sola.
      La idea de Jhammil: no siempre estará con ella, pero la acompañará a
      donde vaya.
    - **El final** (`scenes/finale.ts`, escena aparte a la que main cambia
-     con el evento `finale`): fundido a pergamino; "plantar" (J planta la
+     con el evento `finale`). **Solo se abre con la flor de lila en la mano**:
+     sin ella, Grecia se detiene en `END_X` (4150) y las ayudas le recuerdan
+     que la flor quedó donde pasó la tormenta (`gate.noFlowerHint`,
+     `story.wordsTalk.noFlower`); tiene que volver por ella. Con la flor: fundido a pergamino; "plantar" (J planta la
      flor); del brote crecen ramas, hojas y flores que forman "TE AMO MUCHO
      MUCHO GRECIA" (letras 5×7 de lilas; `GLYPHS`, `MESSAGE`, `LINE_TOPS`)
      — cada punto es una flor de verdad (`bigFloret`, solapadas) sobre ramas
@@ -87,6 +104,13 @@ la historia de los dos. Al final (etapa futura) habrá una carta.
    sentados de Grecia y Jhammil.
 
 ## 3. Cómo correrlo
+
+El `README.md` está escrito **para ella**: la idea (2026-09-13) es que Grecia
+levante el juego en su propia computadora con Windows 11 siguiendo esos pasos
+(Terminal, `winget install OpenJS.NodeJS.LTS`, permiso de scripts, ZIP del
+repo, `npm install`, `npm run dev`), para que vea algo de lo que hace Jhammil.
+Usa npm, no pnpm, para ahorrarle un paso. Las notas de desarrollo quedaron
+al final del README.
 
 ```sh
 pnpm install          # una vez (Node 22+; probado con Node 26 y pnpm 11)
@@ -109,7 +133,7 @@ src/main.ts                arranque: Stage, Input, escena, bucle, puerta, etique
 src/style.css              panel del menú, etiqueta, ayuda, fuentes
 src/engine/stage.ts        resolución 320×180 y escalado entero; 3 capas
 src/engine/loop.ts         bucle rAF con dt acotado + respaldo por setTimeout
-src/engine/input.ts        teclado: flechas/WASD, J acción, Shift/K correr, Esc cancelar
+src/engine/input.ts        teclado: flechas/WASD, J acción, Shift/K correr, Esc cancelar, letras (las palabras)
 src/engine/pixels.ts       PixelBuffer: rasterizador pixel a pixel + sprite() desde texto
 src/engine/rng.ts          aleatorio con semilla (todo el arte es reproducible)
 src/engine/hash.ts         sha256 en JS puro (funciona también en http://)
@@ -162,7 +186,8 @@ scripts/hash.mjs           `pnpm hash`
   Sprites procedimentales en `renderDragon()`.
 - **Charla en la banca**: `sit()` → `zoomTarget = 2`, `busy = true`
   (la escena ignora el teclado) y evento `talk:bench`; main abre
-  `showDialog(story.benchTalk)`; al terminar `afterTalk()`: banca vacía,
+  `showConversation(story.benchTalk)` (ui/dialog.ts: árbol de nodos con
+  opciones; la elección de Grecia se muestra como una caja suya); al terminar `afterTalk()`: banca vacía,
   `him.active`, zoom 1. El zoom se hace re-dibujando la capa nítida (y la
   haze) sobre sí mismas ampliadas, centradas en la banca.
 - **Jhammil acompañante** (`updateFollower`): se coloca a `HAND_GAP` (10 px)
@@ -177,14 +202,31 @@ scripts/hash.mjs           `pnpm hash`
   se dibujan escalados y ordenados por su base; faros/luces rojas en `haze`.
   Atropello = base del auto a ±6 px de los pies (Grecia o Jhammil) y dentro
   de su ancho → `hit:car` → main funde y llama `respawnAtBench()`.
+- **Las palabras** (`updateWords`, `WORDS` 2300–3460): `wordStops` (x,
+  texto, texto sin tildes, `bad`, `done`) y `word` (la que está en juego:
+  `typed`, `time`/`total`, `tries`, `phase` typing/ok/fail). Mientras hay
+  palabra no se mueve (`update` no llama a `movePlayer`); las letras llegan
+  por `Input.takeLetters()`. `wordView()` da texto/letras/tiempo/posición y
+  main lo dibuja en DOM (`.word`, letras `.word__l.is-on`, barra `.word__bar`);
+  en cada palabra la cámara se acerca a los dos (`focusAt`, `zoomTarget=2`) y
+  `toScreen()` pasa la posición por el mismo acercamiento que usa render.
+  Eventos: `talk:words` (introducción → `afterWordsIntro()`), `words`
+  (ayuda), `word:fail:first`, `word:fail`, `words:done`, `noflower`.
 - **Amanecer y verde**: `nightAt(x)` sube en 340–660 y baja en `GREEN`
-  (2230–2560); `greenAt(x)` mezcla el suelo (`paintGreenGround`), y las
+  (3530–3860); `greenAt(x)` mezcla el suelo (`paintGreenGround`), y las
   capas lejana/media tienen colinas y palmeras a partir de la x que
   corresponde al verde según su parallax (`paintGreenHills`,
   `paintDistantPalms`). Props `palm/toborochi/tajibo/banana`.
 - **Despedida** (`updateFarewell`): al cruzar `FAREWELL_X` con Jhammil
-  activo → `busy`, evento `talk:farewell` → diálogo → `afterFarewell()`:
-  `him.active=false`, `him.stayed=true`, saluda 5 s (`waveImgs`).
+  activo → `busy`, la cámara se acerca a los dos (`focusAt`, `zoomTarget=2`),
+  ambiente con viento (`momentOn`, `wind=1`: los pétalos vuelan hacia
+  adelante), evento `talk:farewell` → `showConversation(story.farewellTalk)`
+  → `afterFarewell()`: `him.active=false`, `him.stayed=true`, zoom 1, pájaros
+  que salen volando, saluda 5 s (`waveImgs`).
+- **Ambiente de charla** (`updateMoment`, `moment` 0..1 mientras `momentOn`:
+  banca o despedida; centro en `focusAt`): pétalos de lila (`critters` kind
+  `petal`) caen despacio alrededor de los dos, las luciérnagas se acercan a los dos, y en `haze` hay un
+  resplandor cálido que respira sobre ellos y una viñeta oscura en los bordes.
 - **Vida nocturna** (`updateNightLife`): luciérnagas cuando es de noche y no
   hay tormenta; estrella fugaz cada 12–26 s.
 - **Sonido** (`engine/audio.ts`, `GameAudio`): se crea con el primer gesto;
@@ -267,8 +309,11 @@ Todo texto visible se edita en dos archivos; no hace falta tocar nada más.
 | Pregunta de la fecha, su hash y error | `gate.ts` → `datePrompt`, `dateHash` (vacío = paso desactivado), `msgWrongDate` |
 | Ayudas al pie ("Flechas para caminar…", tormenta, kiosco, tronco, flor, autopista, "Otra vez, con calma.") | `gate.ts` → `moveHint`, `stormHint`, `breakHint`, `shelterHint`, `flowerHint`, `roadHint`, `againHint` |
 | Nombres: Grecia, Jhammil, Chimuelo | `src/content/story.ts` → `herName`, `himName`, `dragonName` |
-| El poema de la banca | `story.ts` → `benchTalk.lines` (una caja por elemento) |
-| La despedida en el verde | `story.ts` → `farewellTalk.lines` |
+| La conversación de la banca (poema + respuestas de Grecia) | `story.ts` → `benchTalk` (árbol: `start` y `nodes`; cada nodo tiene `lines`, y luego `choices` [{say, go}] para que ella elija con ↑↓ y J, o `go` para saltar; sin ninguno termina) |
+| Las palabras del tramo de madrugada (texto y si es difícil) | `story.ts` → `words` (en orden del camino; `bad: true` = se deshace en cenizas) |
+| La introducción de las palabras / lo que dice él si una se apaga / al terminar todas / si llega sin la flor | `story.ts` → `wordsTalk.intro` (cajas), `wordsTalk.failFirst` y `wordsTalk.fail` (al azar), `wordsTalk.done`, `wordsTalk.noFlower` |
+| Ayudas de las palabras y de la flor que falta | `gate.ts` → `wordsHint`, `noFlowerHint` |
+| La despedida en el verde (ella pregunta, él responde, con respuestas de ella) | `story.ts` → `farewellTalk` (mismo árbol que la banca; un nodo con `who: 'Grecia'` lo dice ella) |
 | La palabra de la hoja ("plantar") | `story.ts` → `plantWord` |
 | **La carta** | `story.ts` → `letter` (un párrafo corto por elemento; el último es la firma) |
 | "TE AMO MUCHO MUCHO GRECIA" (hecho de flores) | `src/scenes/finale.ts` → `MESSAGE` (solo letras T E A M O U C H G R I y espacio; añadir otra letra = dibujar su glifo 5×7 en `GLYPHS`) |

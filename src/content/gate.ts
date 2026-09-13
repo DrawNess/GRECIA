@@ -26,5 +26,7 @@ export const gate = {
   shelterHint: 'Bajo el toldo del kiosco los rayos no te alcanzan',
   flowerHint: 'Una flor de lila. Llévala contigo.',
   roadHint: 'Mira a los dos lados: cruza cuando no venga ningún auto',
+  wordsHint: 'Escribe la palabra con el teclado antes de que se apague',
+  noFlowerHint: 'Falta algo. La flor de lila se quedó atrás.',
   againHint: 'Otra vez, con calma.',
 };

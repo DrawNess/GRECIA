@@ -205,6 +205,36 @@ body {
 }
 .mute:hover { opacity: 1; }
 
+/* ── Las palabras: la palabra flotando entre los dos ── */
+.word {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font-family: 'Pixelify Sans', 'DotGothic16', monospace;
+  font-size: calc(7 * var(--u));
+  line-height: 1;
+  letter-spacing: calc(0.5 * var(--u));
+  padding: calc(2 * var(--u)) calc(3 * var(--u)) calc(1.5 * var(--u));
+  background: rgba(255, 255, 255, 0.82);
+  border: var(--u) solid var(--lilac-2);
+  white-space: nowrap;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.word__l { color: var(--lilac-2); }
+.word__l.is-on { color: var(--lilac-4); }
+.word.is-bad { border-color: #aeb4c4; }
+.word.is-bad .word__l { color: #b7bccb; }
+.word.is-bad .word__l.is-on { color: #4a5068; }
+.word__bar { height: var(--u); margin-top: calc(1.5 * var(--u)); background: var(--lilac-1); }
+.word__bar > i { display: block; height: 100%; background: var(--lilac-3); }
+.word.is-bad .word__bar > i { background: #8b93a8; }
+.word.is-shake { animation: word-shake 0.3s ease; }
+.word.is-ok { animation: word-rise 0.7s ease forwards; }
+.word.is-fail { opacity: 0.3; }
+@keyframes word-shake { 25% { transform: translate(calc(-50% - 2 * var(--u)), -100%); } 75% { transform: translate(calc(-50% + 2 * var(--u)), -100%); } }
+@keyframes word-rise { to { transform: translate(-50%, calc(-100% - 10 * var(--u))); opacity: 0; } }
+
 /* ── Caja de diálogo ── */
 .dialog {
   pointer-events: none;
@@ -247,6 +277,28 @@ body {
   animation: arrow 0.9s ease-in-out infinite;
 }
 @keyframes arrow { 50% { transform: translateY(calc(-1 * var(--u))); } }
+/* Respuestas de Grecia: ↑↓ eligen, J confirma. */
+.dialog__choices {
+  margin-top: calc(3 * var(--u));
+  padding-top: calc(2 * var(--u));
+  border-top: var(--u) dotted var(--lilac-2);
+  font-size: calc(6 * var(--u));
+  line-height: 1.5;
+}
+.dialog__choice {
+  position: relative;
+  padding-left: calc(8 * var(--u));
+  color: var(--lilac-3);
+}
+.dialog__choice::before {
+  content: '';
+  position: absolute;
+  left: calc(1 * var(--u));
+  top: 0;
+  color: var(--lilac-4);
+}
+.dialog__choice.is-current { color: var(--ink); }
+.dialog__choice.is-current::before { content: '▶'; animation: arrow 0.9s ease-in-out infinite; }
 
 /* ── El final: la hoja ── */
 .finale-word {

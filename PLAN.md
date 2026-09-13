@@ -35,7 +35,7 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
 
 ## Mundo (etapa 1) — el paseo como recuerdo
 
-- 2920 px (9 pantallas). Vereda continua abajo; senda curva al árbol grande.
+- 4220 px (13 pantallas). Vereda continua abajo; senda curva al árbol grande.
 - **Día → noche** al caminar a la derecha (x 340–660): el cielo pasa por el
   atardecer, la ciudad enciende ventanas, salen estrellas y la luna, los
   faroles se prenden (halo en la capa `haze`, luz horneada en el suelo).
@@ -86,13 +86,18 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   cruza de lado a lado cuando no venga ninguno a esa altura. Si un auto pisa
   a Grecia o a Jhammil: bocina, fundido corto y **vuelven a la banca**, de
   pie y de la mano ("Otra vez, con calma.").
-- Tramo 6 (x 2230–2920): **amanece sobre el verde de Santa Cruz**. El
+- Tramo 5½ (x 2300–3460): **las palabras**. De madrugada, de la mano: en
+  cada parada una palabra o frase (`story.words`) flota entre los dos con una barra
+  de tiempo y Grecia la escribe con el teclado. Las difíciles se deshacen en
+  cenizas; las buenas, en corazones. Si se apaga, él la anima y la palabra
+  vuelve con más tiempo (nunca se pierde). Al terminar, amanece.
+- Tramo 6 (x 3530–4220): **amanece sobre el verde de Santa Cruz**. El
   cielo pasa del índigo al rosa y al celeste, la ciudad se desvanece detrás
   de colinas verdes, el pasto se vuelve verde brillante y la vereda tierra
   colorada; palmeras de motacú, toborochis (tronco de botella, flores
   rosadas), un tajibo amarillo, plátanos, pasto alto con florcitas y pájaros
-  de colores cruzando el cielo. En x 2660 **Jhammil se detiene**: dos líneas
-  suyas (`story.farewellTalk`, editables), le suelta la mano y **la deja
+  de colores cruzando el cielo. En x 3960 **Jhammil se detiene**: la cámara
+  se acerca y hay una conversación con respuestas de ella (`story.farewellTalk`), le suelta la mano y **la deja
   seguir sola**, despidiéndola con la mano (un corazón) y quedándose ahí
   mirándola. La puerta final está al fondo del verde (x 2884).
 - De noche en el parque (fuera de la tormenta): luciérnagas y, de vez en
@@ -101,7 +106,8 @@ Objetivo: PCs de bajos recursos. Hosting gratis en GitHub Pages.
   en la tormenta, pájaros de día, grillos de noche; efectos al golpear y
   romper troncos, crujido y golpe del árbol, Chimuelo, corazones, arbustos.
   Botón ♪ arriba a la derecha y tecla M para silenciar (se recuerda).
-- **El final** (`scenes/finale.ts`): al pasar x 2850 todo se funde en una
+- **El final** (`scenes/finale.ts`): al pasar x 4150 **con la flor en la mano**
+  (sin ella se detiene y debe volver por la flor) todo se funde en una
   hoja de pergamino. Grecia está en el centro con su flor y arriba dice
   **"plantar"** (`story.plantWord`); con J la planta (la flor baja a la
   tierra, chispas). Del brote crecen ramas por toda la hoja, brotan hojas y

@@ -9,20 +9,24 @@ import { C } from '../art/palette';
 import { GRECIA, GRECIA_SEATED, JHAMMIL, JHAMMIL_SEATED, JHAMMIL_WAVE, SPRIG, type DirSprites } from '../art/sprites';
 import { story } from '../content/story';
 import { ACTION, type Input } from '../engine/input';
+import { WordGame, type WordPhase } from '../engine/words';
 import { fogged, mix, floret, panicle, bigFloret, budBig, type Pt as LPt } from '../art/lilac';
 
-export const WORLD_W = 2920;
+export const WORLD_W = 4220;
 const HORIZON = 150;
 // De día junto al árbol; al caminar a la derecha cae la noche, y después de
-// la autopista amanece sobre el verde de Santa Cruz.
+// la autopista y las palabras amanece sobre el verde de Santa Cruz.
 const NIGHT_FROM = 340, NIGHT_TO = 660;
-const GREEN = { x0: 2230, x1: 2560 };
+const GREEN = { x0: 3530, x1: 3860 };
+// Las palabras: el tramo de madrugada entre la autopista y el verde. Las
+// palabras de `story.words` se reparten entre x0 y x1.
+const WORDS = { x0: 2300, x1: 3460 };
 const smooth = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k); };
 const nightAt = (x: number) => smooth((x - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM)) * (1 - smooth((x - GREEN.x0) / (GREEN.x1 - GREEN.x0)));
 const greenAt = (x: number) => smooth((x - GREEN.x0) / (GREEN.x1 - GREEN.x0));
 // Donde Jhammil la deja seguir sola, y donde todo se disuelve en la hoja.
-const FAREWELL_X = 2660;
-const END_X = 2850;
+const FAREWELL_X = 3960;
+const END_X = 4150;
 // La esquina verde: pared, puerta y ventana de su casa, y la calle que dobla.
 // x0..x1 pavimento · wallX0..wallX1 la pared · house su casa · streetX0..x1 la calle que entra
 const STREET = { x0: 600, wallX0: 612, wallX1: 986, house: 996, streetX0: 1040, x1: 1096, wallTop: 92, pole: 1064 };
@@ -88,7 +92,7 @@ interface Branch { x: number; groundY: number; h: number; v: number; rot: number
 interface Car { t: number; lane: number; speed: number; img: HTMLCanvasElement; passed: boolean }
 type TreeState = 'stand' | 'shake' | 'fall' | 'down';
 // Mariposa, pájaro, pétalo, corazón o "z" (coordenadas de mundo).
-interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
+interface Critter { kind: 'butterfly' | 'bird' | 'puff' | 'heart' | 'zz' | 'petal'; x: number; y: number; vx: number; vy: number; ph: number; t: number; life: number; col: string }
 type DragonState = 'sleep' | 'wake' | 'fly' | 'gone';
 interface Dragon { state: DragonState; t: number; x: number; y: number; vx: number; vy: number; hearts: boolean; lastZ: number }
 type Facing = 'up' | 'down' | 'left' | 'right';
@@ -160,7 +164,17 @@ export class TitleScene {
   private zoomTarget = 1;
   private busy = false;       // hay una charla abierta: el teclado es de la caja de diálogo
   private benchTalked = false;
+  private moment = 0;         // ambiente de una charla (0..1): sube al empezar, baja al terminar
+  private momentOn = false;   // hay charla con ambiente (banca o despedida)
+  private wind = 0;           // viento del ambiente: 1 = se lleva los pétalos hacia adelante (despedida)
+  private focusAt = { x: BENCH.x + 4, y: BENCH.baseY - 16 }; // centro (mundo) del acercamiento y del ambiente
   private zoomBox: [number, number, number, number] | null = null;
+  // Las palabras (la lógica vive en engine/words.ts; aquí, efectos y posición).
+  private readonly words: WordGame;
+  private wordsSeen = false;    // ya pasó la introducción del tramo
+  private wordsHinted = false;  // ya se mostró la ayuda de cómo escribir
+  private wordFails = 0;
+  private noFlowerT = 0;      // para no repetir el aviso de la flor a cada paso
   // Tormenta.
   private readonly clouds: HTMLCanvasElement;
   private readonly rain: Rain[] = [];
@@ -267,10 +281,10 @@ export class TitleScene {
     this.himSprites = { up: toCanvasesJ(JHAMMIL.back), down: toCanvasesJ(JHAMMIL.front), right: hr, left: { idle: hr.idle.map(flipX), walk: hr.walk.map(flipX) } };
     void renderGate;
     // El verde cruceño: palmeras, toborochis, tajibo y plátanos.
-    for (const [x, baseY] of [[2330, 156], [2470, 178], [2598, 154], [2790, 176]] as Pt[]) this.addProp('palm', renderPalm(rng), x, baseY, 4, { hw: 3, depth: 3 });
-    for (const [x, baseY] of [[2400, 160], [2720, 155]] as Pt[]) this.addProp('toborochi', renderToborochi(rng), x, baseY, 6, { hw: 5, depth: 3 });
-    this.addProp('tajibo', renderTajibo(rng), 2540, 158, 4, { hw: 3, depth: 3 });
-    for (const [x, baseY] of [[2290, 176], [2650, 177], [2840, 160]] as Pt[]) this.addProp('banana', renderBanana(rng), x, baseY, 6);
+    for (const [x, baseY] of [[3630, 156], [3770, 178], [3898, 154], [4090, 176]] as Pt[]) this.addProp('palm', renderPalm(rng), x, baseY, 4, { hw: 3, depth: 3 });
+    for (const [x, baseY] of [[3700, 160], [4020, 155]] as Pt[]) this.addProp('toborochi', renderToborochi(rng), x, baseY, 6, { hw: 5, depth: 3 });
+    this.addProp('tajibo', renderTajibo(rng), 3840, 158, 4, { hw: 3, depth: 3 });
+    for (const [x, baseY] of [[3590, 176], [3950, 177], [4140, 160]] as Pt[]) this.addProp('banana', renderBanana(rng), x, baseY, 6);
     this.waveImgs = JHAMMIL_WAVE.map((f) => f.toCanvas());
     // Farolas de la autopista a ambos lados, y el resplandor de la ciudad al fondo.
     for (const t of ROAD_LAMPS) {
@@ -303,6 +317,7 @@ export class TitleScene {
       this.addProp('bush', renderBush(rng, r).toCanvas(), cx, baseY, r, undefined, v < 0.42 ? 'none' : v < 0.74 ? 'butterflies' : 'birds');
     }
     this.marker = sprite(MARKER_ROWS, { O: C.lilacDark, W: C.white, Z: C.lilacDeep }).toCanvas();
+    this.words = new WordGame(story.words, WORDS.x0, WORDS.x1);
 
     // ── Grecia ──
     const toCanvases = (d: DirSprites): DirCanvases => ({ idle: d.idle.map((f) => f.toCanvas()), walk: d.walk.map((f) => f.toCanvas()) });
@@ -487,6 +502,8 @@ export class TitleScene {
       if (ax === 0 && ay === 0) return;
       p.sitting = false;
       p.y = BENCH.baseY + 4 - GIRL_H + 1;
+      this.zoomTarget = 1;
+      this.momentOn = false;
     }
     p.moving = ax !== 0 || ay !== 0;
     if (!p.moving) { p.walkT = 0; return; }
@@ -529,6 +546,8 @@ export class TitleScene {
     p.sitting = true; p.moving = false; p.walkT = 0; p.facing = 'right';
     p.x = BENCH.x - 22 + 8; p.y = BENCH.baseY - 25;
     this.zoomTarget = 2;
+    this.focusAt = { x: BENCH.x + 4, y: BENCH.baseY - 16 };
+    this.momentOn = true; this.wind = 0;
     if (!this.benchTalked) { this.busy = true; this.events.push('talk:bench'); }
   }
 
@@ -537,6 +556,7 @@ export class TitleScene {
     this.busy = false;
     this.benchTalked = true;
     this.zoomTarget = 1;
+    this.momentOn = false;
     const p = this.player;
     p.sitting = false;
     p.y = BENCH.baseY + 4 - GIRL_H + 1;
@@ -557,6 +577,10 @@ export class TitleScene {
       this.farewellDone = true;
       this.busy = true;
       p.moving = false; p.walkT = 0;
+      // La cámara se acerca a los dos y el viento del amanecer trae pétalos.
+      this.focusAt = { x: (p.x + h.x) / 2 + 6, y: p.y + 6 };
+      this.zoomTarget = 2;
+      this.momentOn = true; this.wind = 1;
       this.events.push('talk:farewell');
     }
     if (h.stayed) {
@@ -567,11 +591,19 @@ export class TitleScene {
   }
 
   /** Terminó la despedida: se sueltan, él se queda y ella sigue sola. */
+  /** Terminó la introducción de las palabras: siguen de la mano y aparece la primera. */
+  afterWordsIntro(): void { this.busy = false; this.zoomTarget = 1; this.momentOn = false; }
+
   afterFarewell(): void {
     this.busy = false;
     const h = this.him;
     h.active = false; h.holding = false; h.stayed = true; h.waving = 5; h.moving = false; h.facing = 'down';
     this.player.facing = 'right';
+    this.zoomTarget = 1;
+    this.momentOn = false;
+    // Al soltarse, unos pájaros salen volando hacia donde ella va.
+    const r = this.rng;
+    for (let i = 0; i < 4; i++) this.critters.push({ kind: 'bird', x: h.x + r.range(-14, 14), y: h.y - r.range(2, 10), vx: r.range(40, 80), vy: -r.range(60, 100), ph: r.range(0, 6.28), t: -r.range(0, 0.5), life: 6, col: r.pick(['#e8b04a', '#5aa9d6', '#d9524a', '#6e5c57']) });
   }
 
   // Pájaros de colores cruzando el cielo del verde.
@@ -743,6 +775,94 @@ export class TitleScene {
     if (this.dragon.state === 'gone') this.dragon.t = 99;
   }
 
+  // Las palabras: al llegar de la mano a cada parada, una palabra aparece
+  // entre los dos y ella tiene que escribirla antes de que se apague. Si se
+  // apaga, se sueltan un instante, él la anima y la palabra vuelve con un poco
+  // más de tiempo. La lógica está en engine/words.ts; aquí van los efectos.
+  private updateWords(dt: number, input: Input): void {
+    const p = this.player, h = this.him, r = this.rng, g = this.words;
+    // Al llegar al tramo, primero la introducción (una charla); las palabras
+    // empiezan cuando termina.
+    if (!this.wordsSeen && h.active && !this.busy && !p.sitting && p.x + GIRL_W / 2 >= g.stops[0].x - 30) {
+      this.wordsSeen = true; this.busy = true;
+      p.moving = false; p.walkT = 0; p.running = false;
+      // La cámara se acerca a los dos mientras él habla.
+      this.focusAt = { x: (p.x + h.x) / 2 + 6, y: p.y + 6 };
+      this.zoomTarget = 2;
+      this.momentOn = true; this.wind = 0;
+      this.events.push('talk:words');
+      return;
+    }
+    const canStart = this.wordsSeen && h.active && !this.busy && !p.sitting;
+    const letters = g.current ? input.takeLetters() : [];
+    const events = g.update(dt, letters, canStart, p.x + GIRL_W / 2);
+    const stop = g.stop;
+    for (const e of events) {
+      if (e === 'start') {
+        p.moving = false; p.walkT = 0; p.running = false;
+        // En cada palabra la cámara se acerca a los dos; se aleja al seguir.
+        this.focusAt = { x: (p.x + h.x) / 2 + 6, y: p.y + 6 };
+        this.zoomTarget = 2;
+        if (!this.wordsHinted) { this.wordsHinted = true; this.events.push('words'); }
+        this.events.push('sfx:twinkle');
+      } else if (e === 'ok' && stop) {
+        this.events.push('sfx:twinkle');
+        const cx = (p.x + GIRL_W / 2 + h.x + 6) / 2, cy = p.y - 6;
+        if (stop.bad) {
+          // Una palabra difícil, dicha: se deshace en cenizas que se lleva el viento.
+          for (let k = 0; k < 14; k++) this.critters.push({ kind: 'puff', x: cx + r.range(-10, 10), y: cy - r.range(0, 6), vx: r.range(18, 50), vy: -r.range(14, 34), ph: 0, t: -r.range(0, 0.3), life: 1.3, col: r.pick(['#8b93a8', '#aeb4c4', '#6d7386']) });
+        } else {
+          for (let k = 0; k < 5; k++) this.critters.push({ kind: 'heart', x: cx + r.range(-8, 8), y: cy, vx: r.range(-8, 8), vy: -r.range(12, 22), ph: r.range(0, 6.28), t: -k * 0.12, life: 2.2, col: r.pick(['#f38fb1', '#f7a8c4', '#e86f9a']) });
+        }
+      } else if (e === 'fail') {
+        // Se apagó: se sueltan un momento y él la anima.
+        h.x += h.side * 6;
+        this.events.push(this.wordFails++ === 0 ? 'word:fail:first' : 'word:fail'); this.events.push('sfx:rustle');
+      } else if (e === 'next') {
+        this.zoomTarget = 1;
+      } else if (e === 'done') {
+        this.events.push('words:done');
+      }
+    }
+  }
+
+  /** La palabra en juego, para dibujarla en la interfaz (coordenadas de pantalla). */
+  wordView(): { text: string; typed: number; bad: boolean; left: number; shake: boolean; phase: WordPhase; x: number; y: number } | null {
+    const w = this.words.current, stop = this.words.stop;
+    if (!w || !stop) return null;
+    const p = this.player;
+    const [x, y] = this.toScreen((p.x + GIRL_W / 2 + this.him.x + 6) / 2, p.y - 6);
+    return { text: stop.text, typed: w.typed, bad: stop.bad, left: Math.max(0, w.time / w.total), shake: w.shake > 0, phase: w.phase, x, y };
+  }
+
+  /** De coordenadas de mundo a pantalla, contando la cámara y el acercamiento (misma cuenta que en render). */
+  private toScreen(wx: number, wy: number): [number, number] {
+    const cam = Math.round(this.camX);
+    let x = wx - cam, y = wy;
+    const z = this.zoom;
+    if (z > 1.01) {
+      const sw = VW / z, sh = VH / z;
+      const cx = this.focusAt.x - cam, cy = this.focusAt.y;
+      const sx = Math.max(0, Math.min(VW - sw, cx - sw / 2)), sy = Math.max(0, Math.min(VH - sh, cy - sh / 2));
+      x = (x - sx) * z; y = (y - sy) * z;
+    }
+    return [Math.round(x), Math.round(y)];
+  }
+
+  // El ambiente de una charla (banca o despedida): mientras dura caen pétalos
+  // de lila despacio alrededor de `focusAt`; con `wind` el viento se los lleva
+  // hacia adelante. La viñeta y el resplandor van en la bruma.
+  private updateMoment(dt: number): void {
+    const want = this.momentOn ? 1 : 0;
+    this.moment += (want - this.moment) * (1 - Math.exp(-dt / 0.9));
+    if (this.moment < 0.02) return;
+    const r = this.rng;
+    if (r.next() < 2.5 * this.moment * dt) {
+      const f = this.focusAt;
+      this.critters.push({ kind: 'petal', x: f.x + r.range(-95, 95) - this.wind * 40, y: f.y - r.range(20, 90), vx: r.range(-3, 3) + this.wind * r.range(6, 14), vy: r.range(5, 10), ph: r.range(0, 6.28), t: -r.range(0, 0.4), life: r.range(7, 10), col: r.pick([C.lilacLight, C.lilacPale, '#d9c6f0', '#f2e6fb']) });
+    }
+  }
+
   // Luciérnagas en el parque de noche (no en la tormenta) y, de vez en cuando,
   // una estrella fugaz.
   private updateNightLife(dt: number): void {
@@ -756,6 +876,8 @@ export class TitleScene {
     if (want === 0) this.fireflies.length = 0;
     for (const f of this.fireflies) {
       f.vx += r.range(-8, 8) * dt; f.vy += r.range(-6, 6) * dt;
+      // En la charla de la banca se acercan a los dos, despacio.
+      if (this.moment > 0) { f.vx += (this.focusAt.x - f.x) * 0.05 * this.moment * dt; f.vy += (this.focusAt.y - 14 - f.y) * 0.05 * this.moment * dt; }
       f.vx = Math.max(-9, Math.min(9, f.vx)); f.vy = Math.max(-6, Math.min(6, f.vy));
       f.x += f.vx * dt; f.y += f.vy * dt;
       if (f.y < 90) f.vy = Math.abs(f.vy); if (f.y > 174) f.vy = -Math.abs(f.vy);
@@ -934,6 +1056,10 @@ export class TitleScene {
       } else if (c.kind === 'heart' || c.kind === 'zz') {
         c.x += (c.vx + Math.sin(c.t * 3 + c.ph) * 8) * dt;
         c.y += c.vy * dt;
+      } else if (c.kind === 'petal') {
+        c.x += (c.vx + Math.sin(c.t * 1.6 + c.ph) * 7) * dt;
+        c.y += (c.vy + Math.cos(c.t * 2.1 + c.ph) * 2) * dt;
+        if (c.y > this.focusAt.y + 22) c.t = c.life + 1;
       } else if (c.kind === 'butterfly') {
         c.vy += (-14 - c.vy) * 0.4 * dt;
         c.x += (c.vx + Math.sin(c.t * 4.2 + c.ph) * 22) * dt;
@@ -955,11 +1081,12 @@ export class TitleScene {
       this.gameT += dt;
       if (this.focus > 0) this.focus = Math.max(0, this.focus - dt / 1.8);
       this.frontAlpha = Math.max(0, Math.min(1, 1 - (this.gameT - 0.55) / 0.9));
-      if (input && !this.busy) {
+      if (input && !this.busy && !this.words.current) {
         this.movePlayer(dt, input);
         this.nearProp = this.findNearProp();
         if (input.take(ACTION) && this.nearProp) this.poke(this.nearProp);
       }
+      if (input) this.updateWords(dt, input);
       this.zoom += (this.zoomTarget - this.zoom) * (1 - Math.exp(-4 * dt));
       this.updateFollower(dt);
       for (const pr of this.props) if (pr.shake > 0) pr.shake = Math.max(0, pr.shake - dt);
@@ -967,13 +1094,23 @@ export class TitleScene {
       this.updateStorm(dt);
       this.updateHighway(dt);
       this.updateFarewell(dt);
-      if (this.endingT < 0 && this.player.x + GIRL_W / 2 >= END_X && !this.busy) this.endingT = 0;
+      // El final solo se abre con la flor de lila en la mano; sin ella, se
+      // detiene aquí y la ayuda le recuerda dónde quedó.
+      this.noFlowerT -= dt;
+      if (this.endingT < 0 && this.player.x + GIRL_W / 2 >= END_X && !this.busy) {
+        if (this.player.flower) this.endingT = 0;
+        else {
+          this.player.x = END_X - GIRL_W / 2 - 0.5; this.player.moving = false; this.player.walkT = 0;
+          if (this.noFlowerT <= 0) { this.events.push('noflower'); this.noFlowerT = 8; }
+        }
+      }
       if (this.endingT >= 0) {
         this.endingT += dt;
         if (this.endingT > 0.6) { this.player.moving = false; this.player.stun = 99; }
         if (this.endingT > 2.6) { this.endingT = 99; this.events.push('finale'); }
       }
       this.updateParrots(dt);
+      this.updateMoment(dt);
       this.updateNightLife(dt);
       this.updateCritters(dt);
       for (let i = this.flyers.length - 1; i >= 0; i--) {
@@ -1182,6 +1319,11 @@ export class TitleScene {
         crisp.fillRect(x - 2, y, 5, 2); crisp.fillRect(x - 1, y + 2, 3, 1); crisp.fillRect(x, y + 3, 1, 1);
         crisp.fillStyle = '#ffd2e1'; crisp.fillRect(x - 1, y, 1, 1);
         crisp.globalAlpha = 1;
+      } else if (c.kind === 'petal') {
+        crisp.globalAlpha = Math.max(0, Math.min(1, c.t / 0.8, (c.life - c.t) / 1.2)) * this.moment;
+        const tilt = Math.sin(c.t * 1.6 + c.ph) > 0;
+        crisp.fillRect(x, y, 2, 1); crisp.fillRect(x + (tilt ? 1 : 0), y + 1, 1, 1);
+        crisp.globalAlpha = 1;
       } else if (c.kind === 'zz') {
         crisp.globalAlpha = Math.max(0, Math.min(1, (c.life - c.t) / 0.7));
         crisp.fillStyle = '#f4f0ff';
@@ -1307,7 +1449,7 @@ export class TitleScene {
     // (escala entera cuando llega a 2×, así el píxel sigue nítido).
     if (this.zoom > 1.01) {
       const z = this.zoom, sw = VW / z, sh = VH / z;
-      const cx = BENCH.x + 4 - cam, cy = BENCH.baseY - 16;
+      const cx = this.focusAt.x - cam, cy = this.focusAt.y;
       const sx = Math.max(0, Math.min(VW - sw, cx - sw / 2)), sy = Math.max(0, Math.min(VH - sh, cy - sh / 2));
       crisp.drawImage(crisp.canvas, sx, sy, sw, sh, 0, 0, VW, VH);
       this.zoomBox = [sx / 4, sy / 4, sw / 4, sh / 4];
@@ -1395,6 +1537,22 @@ export class TitleScene {
     if (this.zoomBox) {
       const [sx, sy, sw, sh] = this.zoomBox;
       haze.drawImage(haze.canvas, sx, sy, sw, sh, 0, 0, SW, SH);
+    }
+    // Ambiente de la banca: un resplandor cálido sobre los dos que respira
+    // despacio, y los bordes de la pantalla se oscurecen (viñeta) para que
+    // todo se concentre en ellos.
+    if (this.moment > 0.01) {
+      const m = this.moment, breathe = 0.85 + 0.15 * Math.sin(this.t * 0.9);
+      const cx = SW / 2, cy = SH / 2 + 4;
+      const glow = haze.createRadialGradient(cx, cy, 2, cx, cy, 18);
+      glow.addColorStop(0, `rgba(255,222,190,${(0.22 * m * breathe).toFixed(3)})`);
+      glow.addColorStop(0.5, `rgba(233,205,240,${(0.10 * m * breathe).toFixed(3)})`);
+      glow.addColorStop(1, 'rgba(233,205,240,0)');
+      haze.fillStyle = glow; haze.fillRect(0, 0, SW, SH);
+      const vig = haze.createRadialGradient(cx, cy, 14, cx, cy, 46);
+      vig.addColorStop(0, 'rgba(28,18,44,0)');
+      vig.addColorStop(1, `rgba(28,18,44,${(0.5 * m).toFixed(3)})`);
+      haze.fillStyle = vig; haze.fillRect(0, 0, SW, SH);
     }
   }
 }
@@ -1597,7 +1755,7 @@ function paintStreet(pb: PixelBuffer, rng: Rng): void {
   pb.rect(pole + 4, base - 31, 4, 1, hex('#3b3236')); pb.rect(pole + 4, base - 30, 4, 2, hex(C.lampLight)); pb.set(pole + 5, base - 30, hex('#ffffff'));
 }
 
-const LAMPS = [420, 655, 955, 1910];
+const LAMPS = [420, 655, 955, 1910, 2470, 2860, 3250];
 
 // ───────────────────────── árboles ─────────────────────────
 
