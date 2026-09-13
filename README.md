@@ -1,6 +1,6 @@
 # Grecia
 
-> Un paseo entre lilas. Un juego en pixel art, hecho para una sola persona.
+> Un paseo entre lilas. Un juego en pixel art, hecho ti GRECIA.
 
 Hola, Grecia.
 
@@ -18,7 +18,7 @@ Tarda unos diez minutos la primera vez. Después, un minuto.
 ### Paso 0 · Lo que necesitas
 
 - Una computadora con **Windows 11**.
-- Internet (solo para instalar; el juego después funciona sin conexión).
+- Internet (solo para instalar el juego después funciona sin conexión).
 - Un rato tranquilo, con auriculares si tienes. El juego tiene sonido.
 
 ### Paso 1 · Abre la Terminal
@@ -26,7 +26,7 @@ Tarda unos diez minutos la primera vez. Después, un minuto.
 La Terminal es la ventana negra donde los programadores escriben órdenes.
 Vas a usarla varias veces, así que conócela desde ahora.
 
-1. Presiona la tecla **Windows**, escribe `Terminal` y ábrela.
+1. Presiona la tecla **Windows**, escribe `Terminal` o 'CMD' y ábrela.
 2. Se abre una ventana con un texto que termina en `>`. Ahí se escriben los
    comandos: los escribes tal cual y presionas **Enter**.
 
@@ -183,5 +183,11 @@ otro número (por ejemplo `5174`), usa ese.
 
 **Se ve muy pequeño** · Presiona F11 en el navegador. Y juega en la
 computadora, no en el celular: está hecho para teclado.
+
+**Si necesitas navegar en carpetas** 
+cd NombreCarpeta *Para entrar a una carpeta*
+cd .. *Para salir de una carpeta*
+dir *Para listar carpetas*
+
 
 **Cualquier otra cosa** · Escríbeme. Para eso estoy.
