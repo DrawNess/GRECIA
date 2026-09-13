@@ -6,6 +6,5 @@ dist
 # solo local
 docs/
 PLAN.md
-arts/
 scripts/sprites-png.mjs
 scripts/escena-png.mjs
